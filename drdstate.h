@@ -4,7 +4,13 @@
 
 #include "arm_math.h"
 
-#define VERSION "V2.15"
+// #define _TEST_
+
+#ifdef _TEST_
+#define VERSION "T2.25"
+#else
+#define VERSION "V2.25"
+#endif
 
 #define SAMPLE_FREQUENCY (6000000/256.0)
 #define BLOCK_SIZE 256
@@ -67,8 +73,8 @@
 #define DRD_MFOR_CAB_MIN_DETECT 11025  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
 #define DRD_MFOR_AFTC_MIN_DETECT 10000 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
 
-#define DRD_STL_CAB_MIN_DETECT 1430  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
-#define DRD_STL_AFTC_MIN_DETECT 1300 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
+#define DRD_STL_CAB_MIN_DETECT 1024  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
+#define DRD_STL_AFTC_MIN_DETECT 931 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
 
 #define DRD_RET_CAB_MIN_DETECT  11025  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
 #define DRD_RET_AFTC_MIN_DETECT  10000  // 4225 around .080 Scaled Arms w/ equiv 0.14-ohm shunt 

@@ -227,7 +227,7 @@ void MenuRoutine( struct _drd_state_ *state, unsigned char *point, int charPrese
               state -> MenuState = MENU_TESTS_LEVEL;
               state -> TestsMenuLevel = TESTS_TOP_MENU_LEVEL;
 
-              LowLevelTests( state, state -> LineString, charPresent );
+              LowLevelTests( state, state -> LineString, 0 );
 	    break;
 
             default:

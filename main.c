@@ -43,14 +43,6 @@
 #include "m0main.h"
 #include "drdstate.h"
 
-// #define _TEST4_
-
-#ifdef _TEST4_
-#define SOFTWARE_VERSION "T1.01"
-#else
-#define SOFTWARE_VERSION "V1.01"
-#endif
-
 #define BEEP_COUNT 7
 
 #define MESSAGE_SOFTWARE_VERSION 101
@@ -769,7 +761,7 @@ __attribute__((section(".data"))) int SaveParameters( void )
 */
 
 int main(void)
-{  int charPresent, j, last_sensor, sensor, didsensor = 1, lookbuttons, val32, displowbatt, beepCounter = 0;
+{  int charPresent, j, last_sensor, sensor, didsensor = 1, lookbuttons, val32, displowbatt = 0, beepCounter = 0, total;
   uint32_t *storedParameters = (uint32_t *) 0x70000;
   uint16_t i , frequencyIndex = 1;
   uint64_t sTime, eTime;
@@ -1405,18 +1397,24 @@ int main(void)
           GetCorrectCodeForDisplay( &DRDState, lcdbuf );        // obtain correct code for display
           LCD_Gotoxy( &DRDState, 1, 1 );
           LCD_Puts( &LCDTransmitRingBuffer, lcdbuf, strlen(lcdbuf) );                        // send the CODE to the LCD display
-          GetCorrectDutyForDisplay( &DRDState, lcdbuf );        // obtain correct duty cycle for display
+
+          if ( DRDState.DRDPersonality == DRD_PERSONALITY_DRD_RET )
+          {
+            GetCorrectDutyForDisplay( &DRDState, lcdbuf );        // obtain correct duty cycle for display
+          }
+          else
+          {
+            GetFreqForDisplay( &DRDState, lcdbuf );
+          }
+
           LCD_Gotoxy( &DRDState, 1, 2 );
           LCD_Puts( &LCDTransmitRingBuffer, lcdbuf, strlen(lcdbuf) );                        // send the DUTY CYCLE to the LCD display
         }
+      }
 
-        if ( displowbatt )
-        {
-          displowbatt = 0;
-          LCD_Gotoxy( &DRDState, 1, 2 );
-          GetFreqForDisplay( &DRDState, lcdbuf );
-          LCD_Puts( &LCDTransmitRingBuffer, lcdbuf, strlen(lcdbuf) );
-        }
+      if ( displowbatt && !(loop_count % 200) )
+      {
+        displowbatt = 0;
       }
 
       if ( !(DRDState.TenthSecondsCounter % 5) )
@@ -1445,12 +1443,19 @@ int main(void)
           LCD_Puts( &LCDTransmitRingBuffer, lcdbuf, strlen(lcdbuf) );
           PowerDown();
         }
-        else if ( DRDState.BattSampling < LOW_BATTERY_WARNING )
+        else if ( (DRDState.BattSampling < LOW_BATTERY_WARNING) && !displowbatt )
         {
           displowbatt = 1;
           LCD_Gotoxy( &DRDState, 1, 2 );
           sprintf( lcdbuf, "%s", DRDPersTable.LoBatMsg);
           LCD_Puts( &LCDTransmitRingBuffer, lcdbuf, strlen(lcdbuf) );
+#ifdef _TEST_
+          total = (int) loop_count;
+
+          sprintf(output, "\r\n%s %d", lcdbuf, total);
+
+          SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+#endif
         }
       }
     }

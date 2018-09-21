@@ -35,6 +35,9 @@ void PrintTestsMenu( void )
   sprintf( output, "\r\n 5) Power Save Disable" );
   SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
 
+  sprintf( output, "\r\n 6) Software Power Down" );
+  SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
+
   sprintf( output, "\r\n\nEnter Selection : ");
   SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
 }
@@ -63,76 +66,82 @@ void LowLevelTests( struct _drd_state_ *state, unsigned char *point, int charPre
     }
     else
     {
-      if ( point[1] != '\r' )
+      if ( charPresent )
       {
-        PrintTestsMenu();
+        if ( point[1] != '\r' )
+        {
+          PrintTestsMenu();
 
-        state -> TestsMenuLevel = TESTS_MAIN_INPUT_MENU_LEVEL;
+          state -> TestsMenuLevel = TESTS_MAIN_INPUT_MENU_LEVEL;
 
-        return;
-      }
+          return;
+        }
 
-      switch( point[0] )
-      {
-      case '1' :
-        LCD_Init( state );
+        switch( point[0] )
+        {
+        case '1' :
+          LCD_Init( state );
 
-        LCD_Gotoxy(state, 1, 1);
-        LCD_Puts( &LCDTransmitRingBuffer, "0123456789012345", 16);
+          LCD_Gotoxy(state, 1, 1);
+          LCD_Puts( &LCDTransmitRingBuffer, "0123456789012345", 16);
 
-        LCD_Gotoxy( state, 1, 2);
-        LCD_Puts( &LCDTransmitRingBuffer, "ABCDEFGHIJKLMNOP", 16);
+          LCD_Gotoxy( state, 1, 2);
+          LCD_Puts( &LCDTransmitRingBuffer, "ABCDEFGHIJKLMNOP", 16);
 
-        PrintTestsMenu();
-        break;
+          PrintTestsMenu();
+          break;
 
-      case '2' :
-        sprintf(output, "\r\nEnter Duty (0,10,20...,90,100) : ");
-        SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
+        case '2' :
+          sprintf(output, "\r\nEnter Duty (0,10,20...,90,100) : ");
+          SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
 
-	state -> LineMax = 9;
+	  state -> LineMax = 9;
 
-	state -> LineSize = 0;
+	  state -> LineSize = 0;
 
-	state -> LineString[0] = 0;
+	  state -> LineString[0] = 0;
 
-	state -> TestsMenuLevel = TESTS_INPUT1_MENU_LEVEL;
-        break;
+	  state -> TestsMenuLevel = TESTS_INPUT1_MENU_LEVEL;
+          break;
 
-      case '3' :
-        sprintf(output, "\r\nBeeper - Enter 0=OFF  1=ON : ");
-        SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
+        case '3' :
+          sprintf(output, "\r\nBeeper - Enter 0=OFF  1=ON : ");
+          SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
 
-	state -> LineMax = 3;
+	  state -> LineMax = 3;
 
-	state -> LineSize = 0;
+	  state -> LineSize = 0;
 
-	state -> LineString[0] = 0;
+	  state -> LineString[0] = 0;
 
-	state -> TestsMenuLevel = TESTS_INPUT2_MENU_LEVEL;
-        break;
+	  state -> TestsMenuLevel = TESTS_INPUT2_MENU_LEVEL;
+          break;
 
-      case '4' :
-        sprintf(output, "\r\nGain Pot - Enter Setting ( 0 -> 255) : ");
-        SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
+        case '4' :
+          sprintf(output, "\r\nGain Pot - Enter Setting ( 0 -> 255) : ");
+          SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen( output ) );
 
-	state -> LineMax = 5;
+	  state -> LineMax = 5;
 
-	state -> LineSize = 0;
+	  state -> LineSize = 0;
 
-	state -> LineString[0] = 0;
+	  state -> LineString[0] = 0;
 
-	state -> TestsMenuLevel = TESTS_INPUT3_MENU_LEVEL;
-        break;
+	  state -> TestsMenuLevel = TESTS_INPUT3_MENU_LEVEL;
+          break;
 
-      case '5' :
-        state -> PowerSaveEnable = 2;
+        case '5' :
+          state -> PowerSaveEnable = 2;
 
-        PrintTestsMenu();
-        break;
+          PrintTestsMenu();
+          break;
 
-      default :
-        break;
+        case '6' :
+          PowerDown();
+
+        default :
+          break;
+        }
       }
     }
     break;

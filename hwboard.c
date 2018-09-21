@@ -32,15 +32,15 @@ int ReadShuntType(void)
     float fval32 = GetADCVoltage( ADC_SHUNTMONV );
 
     // Determine if the ADC value matches a known sensor detection scheme
-    if ( fval32 <= .0032f )
+    if ( fval32 < .007f )
     {
         sensDet = SENSDET_SHORT;
     }
-    else if ( ( fval32 >= .0132f ) && ( fval32 <= .0162f ) )
+    else if ( ( fval32 >= .007f ) && ( fval32 <= .025f ) )
     {
         sensDet = SENSDET_200OHM;
     }
-    else if ( ( fval32 >= .0319f ) && ( fval32 <= .0390f ) )
+    else if ( ( fval32 >= .025f ) && ( fval32 <= .045f ) )
     {
         sensDet = SENSDET_500OHM;
     }
@@ -204,6 +204,8 @@ void Beeper(int onoff)
   if ( onoff == 0 )
   {
     Chip_TIMER_Disable( LPC_TIMER2 );
+
+    LPC_TIMER2 -> EMR &= ~2;
   }
   else
   {

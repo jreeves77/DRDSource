@@ -960,15 +960,17 @@ void DoBatteryTest( struct _drd_state_ *state )
 
   pct = fval32 - 4.0f;
 
-  if (pct > 1.0f)
+  if (pct > 2.25f)
   {
-    pct = 1.0f;
+    pct = 2.25f;
   }
 
   if (pct < 0.0)
   {
     pct = 0.0;
   }
+
+  pct /= 2.25;
 
   pct = pct*100.0f;
 
@@ -1722,6 +1724,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
   uint32_t val32 = 0;
   uint32_t rem32;
   float val32f;
+  int i;
 
   switch ( state -> DRDPersonality )
   {
@@ -2029,7 +2032,13 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
       //
       ////////////////////////////////////////////////////////////////////////////
 
-      if ( !state -> Calibrating && (((state -> SigType == SIGTYPE_DRD_STL_AFTC) && ((state -> DemodState == AFTC_STATE_NOCARRIER) ||
+      i = ReadShuntType();
+
+      if ( i != SENSDET_200OHM )
+      {
+        sprintf( dispbuf, "Check Shunt      " );
+      }
+      else if ( !state -> Calibrating && (((state -> SigType == SIGTYPE_DRD_STL_AFTC) && ((state -> DemodState == AFTC_STATE_NOCARRIER) ||
 	 				                                (state -> DemodState == AFTC_STATE_UNKNOWN_0) ||
 						                        (state -> DemodState == AFTC_STATE_UNKNOWN_1))) ||
 
@@ -2038,12 +2047,14 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
       {
         val32 = 0;
 
-	sprintf( dispbuf, "UNKNOWN" );
+	sprintf( dispbuf, "UNKNOWN    " );
       }
       else
       {
         // Apply offset
 	
+        BuildBaseDisplay( state, MODE_MEAS, 1, dispbuf );
+
         if ( ampsval >= state -> PresAmpsOffsetCal)
         {
           ampsval -= state -> PresAmpsOffsetCal;
@@ -2069,7 +2080,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 
 	if ( val32f >= 6.000 )
 	{
-          sprintf( dispbuf, " OVER  " );
+          sprintf( dispbuf, " OVER " );
 	}
 	else
 	{
@@ -2081,6 +2092,8 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 	  sprintf( dispbuf, "%3.3f  ", val32f );
 	}
       }
+
+      dispbuf[strlen(dispbuf)] = ' ';
     }
     break;
 
@@ -2828,7 +2841,7 @@ void GetFreqForDisplay( struct _drd_state_ *state, char *dispbuf )
       {
         state -> PresDispFreq = state -> aDispFreqTab[state -> PresFreqIdx];
 
-        sprintf(dispbuf, "%3dHZ", state -> PresDispFreq);
+        sprintf(dispbuf, "%3dHZ ", state -> PresDispFreq);
       }
     }
     break;
@@ -3299,7 +3312,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
         {
           if ( Line == 1 )
           {
-            sprintf(dispbuf, "        %s    ", DRDPersTable.AmpsUnits2);
+            sprintf(dispbuf, "        %s     ", DRDPersTable.AmpsUnits2);
           }
           else
           {
@@ -3332,7 +3345,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
 
           if ( Line == 1 )
           {
-            sprintf(dispbuf, "        %s   ", DRDPersTable.AmpsUnits1);
+            sprintf(dispbuf, "        %s     ", DRDPersTable.AmpsUnits1);
           }
           else
           {
