@@ -2406,18 +2406,11 @@ void DRD_RET_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size
           state -> DemodState = DRD_RET_CAB_STATE_UNKNOWN;
 	}
 
-        if ( (Voltage2MagSquared >= state -> DemodThreshold) && (Voltage2MagSquared >= .2*Voltage1MagSquared) )
+        if ( Voltage2MagSquared >= state -> DemodThreshold )
         {
           int retIndex = 0;
 
-#ifdef _CHANGE_
-	  if ( !scanExtraCount && !scanFreq1Idx )
-	  {
-            state -> DemodState = DRD_RET_CAB_STATE_UNKNOWN;
-	  }
-#endif
-
-          if ( state -> DemodState == DRD_RET_CAB_STATE_UNKNOWN )
+          if ( state -> DemodState == DRD_RET_CAB_STATE_PRIMARY )
           {
             state -> PresFreq1Idx = (state -> PresFreq1Idx + scanFreq1Idx) % state -> NumFreqs;
 
@@ -2509,9 +2502,9 @@ void DRD_RET_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size
         {
           if ( !scanFreq1Idx )
           {
-            TraceState( 7, DRD_RET_CAB_STATE_UNKNOWN );
+            TraceState( 7, DRD_RET_CAB_STATE_PRIMARY );
 
-            state -> DemodState = DRD_RET_CAB_STATE_UNKNOWN;
+            state -> DemodState = DRD_RET_CAB_STATE_PRIMARY;
           }
 
           scanFreq1Idx += 1;

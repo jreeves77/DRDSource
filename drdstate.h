@@ -7,9 +7,9 @@
 // #define _TEST_
 
 #ifdef _TEST_
-#define VERSION "T2.25"
+#define VERSION "T2.31"
 #else
-#define VERSION "V2.25"
+#define VERSION "V2.31"
 #endif
 
 #define SAMPLE_FREQUENCY (6000000/256.0)
@@ -76,8 +76,8 @@
 #define DRD_STL_CAB_MIN_DETECT 1024  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
 #define DRD_STL_AFTC_MIN_DETECT 931 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
 
-#define DRD_RET_CAB_MIN_DETECT  11025  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
-#define DRD_RET_AFTC_MIN_DETECT  10000  // 4225 around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
+#define DRD_RET_CAB_MIN_DETECT  67600  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
+#define DRD_RET_AFTC_MIN_DETECT  37809  // 4225 around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
 
 // DRD-ROW / DRD-MFOR AFTC Decoding States
 #define AFTC_STATE_CONSTANT  0x21    // 10_0001  0x21
@@ -122,9 +122,10 @@
 #define DRD_MFOR_CAB_STATE_0         11
 
 // DRD_RET CAB Codes Detection MIN/MAX thresholds, decoding states, etc.
+#define DRD_RET_CAB_STATE_NOCARRIER  0
 #define DRD_RET_CAB_STATE_MULTIPLE   1
-#define DRD_RET_CAB_STATE_NOCARRIER  2
-#define DRD_RET_CAB_STATE_UNKNOWN    3
+#define DRD_RET_CAB_STATE_UNKNOWN    2
+#define DRD_RET_CAB_STATE_PRIMARY    3
 #define DRD_RET_CAB_STATE_0A         4
 #define DRD_RET_CAB_STATE_10A        5
 #define DRD_RET_CAB_STATE_20P        6

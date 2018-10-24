@@ -74,15 +74,15 @@ int CheckSensorMatch( struct _drd_state_ *state )
   fval32 = GetADCVoltage( ADC_SHUNTMONV );
 
   // Determine if the ADC value matches a known sensor detection scheme
-  if ( fval32 <= 32.0f )
+  if ( fval32 < .007f )
   {
     sensdet = SENSDET_SHORT;
   }
-  else if ( ( fval32 >= 132.0f ) && ( fval32 <= 162.0f ) )
+  else if ( ( fval32 >= .007f ) && ( fval32 <= .025f ) )
   {
     sensdet = SENSDET_200OHM;
   }
-  else if ( ( fval32 >= 319.0f ) && ( fval32 <= 390.0f ) )
+  else if ( ( fval32 >= .025f ) && ( fval32 <= .045f ) )
   {
     sensdet = SENSDET_500OHM;
   }

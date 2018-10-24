@@ -2119,8 +2119,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 	 				                                             (state -> DemodState == AFTC_STATE_UNKNOWN_0) ||
 						                                     (state -> DemodState == AFTC_STATE_UNKNOWN_1))) ||
 
-                               ((state -> SigType == SIGTYPE_DRD_RET_CAB) && ((state -> DemodState == DRD_RET_CAB_STATE_UNKNOWN) ||
-	                                                                      (state -> DemodState == DRD_RET_CAB_STATE_NOCARRIER)))) )
+                               ((state -> SigType == SIGTYPE_DRD_RET_CAB) && (state -> DemodState == DRD_RET_CAB_STATE_NOCARRIER))) )
       {
         val32 = 0;
 
@@ -2142,7 +2141,15 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
         // Scale value here is primarily based on above formula and then
         // adjusted as needed to get the desired measurement in the lab.
 	
-        val32f = ampsval * 575;    // for 0.20 Shunt.
+        
+        if ( state -> SigType == SIGTYPE_DRD_RET_CAB )
+        {
+          val32f = ampsval * 575;    // for 0.20 Shunt.
+        }
+        else
+        {
+          val32f = ampsval * 282;    // for 0.20 Shunt.
+        }
 
         // The DRD-STL signals are gained by 4 to attain desired decoding
         // thresholds. (need to adjust the displayed value back down.)
@@ -2153,19 +2160,38 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 	
         val32f = (val32f * state -> PresAmpsGainCal)/1000.0;
 
-	if ( val32f > 10.000 )
-	{
-          sprintf( dispbuf, " OVER  " );
-	}
-	else
-	{
-          // for DRD-RET displayed amps will be from 0.00 to 10.00
-          // this is represented by 0 to 1000 in val32
-          //UIF32ToAsciiFloat(val32, numbuf,6, 3, 1);
-          //isprintf(dispbuf,"%s ",numbuf);
+        if ( state -> SigType == SIGTYPE_DRD_RET_CAB )
+        {
+	  if ( val32f > 20.000 )
+	  {
+            sprintf( dispbuf, " OVER  " );
+	  }
+	  else
+	  {
+            // for DRD-RET displayed amps will be from 0.00 to 10.00
+            // this is represented by 0 to 1000 in val32
+            //UIF32ToAsciiFloat(val32, numbuf,6, 3, 1);
+            //isprintf(dispbuf,"%s ",numbuf);
 
-	  sprintf( dispbuf, "%3.3f  ", val32f );
-	}
+	    sprintf( dispbuf, "%3.2f   ", val32f );
+	  }
+        }
+        else
+        {
+	  if ( val32f > 10.000 )
+	  {
+            sprintf( dispbuf, " OVER  " );
+	  }
+	  else
+	  {
+            // for DRD-RET displayed amps will be from 0.00 to 10.00
+            // this is represented by 0 to 1000 in val32
+            //UIF32ToAsciiFloat(val32, numbuf,6, 3, 1);
+            //isprintf(dispbuf,"%s ",numbuf);
+
+	    sprintf( dispbuf, "%3.2f   ", val32f );
+	  }
+        }
       }
     }
     break;
@@ -2587,48 +2613,122 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
             sprintf(dispbuf, "---- 000HZ 000HZ", state -> PresDispFreq, state -> PresDispFreq1 );
           break;
 
+          case DRD_RET_CAB_STATE_PRIMARY:
+            sprintf(dispbuf, "---- %3dHZ 000HZ", state -> PresDispFreq );
+          break;
+
           case DRD_RET_CAB_STATE_UNKNOWN:
             sprintf(dispbuf, "---- 000HZ 000HZ", state -> PresDispFreq, state -> PresDispFreq1 );
           break;
 
           case DRD_RET_CAB_STATE_0A:
-            sprintf(dispbuf, "-01- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-01- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-01- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_10A:
-            sprintf(dispbuf, "-02- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-02- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-02- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_20P:
-            sprintf(dispbuf, "-03- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-03- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-03- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_60G:
-            sprintf(dispbuf, "-04- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-04- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-04- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_35G:
-            sprintf(dispbuf, "-05- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-05- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-05- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_50ROZ:
-            sprintf(dispbuf, "-06- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-06- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-06- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_50ST:
-            sprintf(dispbuf, "-07- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-07- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-07- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_50G:
-            sprintf(dispbuf, "-08- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-08- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-08- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_70G:
-            sprintf(dispbuf, "-09- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-09- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-09- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           case DRD_RET_CAB_STATE_80G:
-            sprintf(dispbuf, "-10- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf(dispbuf, "-10- %3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq );
+            }
+            else
+            {
+              sprintf(dispbuf, "-10- %3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1 );
+            }
           break;
 
           default:
@@ -2699,6 +2799,7 @@ void GetCorrectDutyForDisplay( struct _drd_state_ *state, char *dispbuf )
             sprintf(dispbuf, "UNKWN");
           break;
 
+          case DRD_RET_CAB_STATE_PRIMARY:
           case DRD_RET_CAB_STATE_UNKNOWN:
             sprintf(dispbuf, "UNKWN");
           break;
@@ -3416,7 +3517,14 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
             state -> PresDispFreq = state -> aDispFreqTab[state -> PresFreqIdx];
             state -> PresDispFreq1 = state -> aDispFreqTab[state -> PresFreq1Idx];
 
-            sprintf( tbuf, "%3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1);
+            if ( state -> PresDispFreq > state -> PresDispFreq1 )
+            {
+              sprintf( tbuf, "%3dHZ %3dHZ", state -> PresDispFreq1, state -> PresDispFreq);
+            }
+            else
+            {
+              sprintf( tbuf, "%3dHZ %3dHZ", state -> PresDispFreq, state -> PresDispFreq1);
+            }
 
             sprintf(dispbuf, "---- %s", tbuf);
           }

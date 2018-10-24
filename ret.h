@@ -18,8 +18,8 @@ PERS_TAB_T DRDPersTable =
   SIGTYPE_DRD_RET_CAB,                // Signalling Type 1
   SIGTYPE_DRD_RET_AFTC,               // Signalling Type 2
   SIGTYPE_NONE,                       // Signalling Type 3
-  SENSTYPE_SHUNT,    // Sensor type for Sig mode 1 (bit encoded as type is bits 7:0 and detection as bits 10:8)
-  SENSTYPE_SHUNT | SENSDET_200OHM,    // Sensor type for Sig mode 2 (bit encoded as type is bits 7:0 and detection as bits 10:8)
+  SENSTYPE_SHUNT | SENSDET_200OHM,    // Sensor type for Sig mode 1 (bit encoded as type is bits 7:0 and detection as bits 10:8)
+  SENSTYPE_SHUNT | SENSDET_500OHM,    // Sensor type for Sig mode 2 (bit encoded as type is bits 7:0 and detection as bits 10:8)
   0,                                  // Sensor type for Sig mode 3 (bit encoded as type is bits 7:0 and detection as bits 10:8)
   1,                                  // HW gain setting (0 or 1) for sig type 1
   1,                                  // HW gain setting (0 or 1) for sig type 2
@@ -37,8 +37,8 @@ PERS_TAB_T DRDPersTable =
     0, 0, 0, 0, 0
   },
   { // Display Freqs for Sig Type 2
-    2100, 2340, 2700, 3120, 3510,
-    3850, 4130, 4410, 0, 0,
+    2100, 2340, 3510, 4410, 2700,
+    3120, 3850, 4130, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0
   },

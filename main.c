@@ -1304,6 +1304,11 @@ int main(void)
         last_sensor = sensor;
         sensor = SensorDetect();
 
+        if ( sensor )
+        {
+          sensor = CheckSensorMatch( &DRDState );
+        }
+
         DRDState.SecondsCounter += 1;
 
         if ( (last_sensor != sensor) && (sensor == 1) )
