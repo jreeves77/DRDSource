@@ -85,7 +85,8 @@
 #define LOW_BATTERY_THRESHOLD 4.0f
 #define LOW_BATTERY_WARNING 4.25f
 
-#include "ret.h"
+#include "char.h"
+// #include "ret.h"
 // #include "stl.h"
 
 unsigned int Parameters[64];
@@ -1726,6 +1727,17 @@ int main(void)
         else // (gSigType == SIGTYPE_DRD_ROW_CAB)
         {
           DRD_ROW_CABDecoder( &DRDState, rxBuff[currentBuffer ^ 1], TRANSFER_SIZE) ;
+        }
+      break;
+
+      case DRD_PERSONALITY_DRD_CHAR:
+        if ( DRDState.SigType == SIGTYPE_DRD_CHAR_AFTC )
+        {
+          DRD_AFTCDecoder( &DRDState, rxBuff[currentBuffer ^ 1], TRANSFER_SIZE) ;
+        }
+        else // (gSigType == SIGTYPE_DRD_MFOR_CAB)
+        {
+          DRD_CHAR_CABDecoder( &DRDState, rxBuff[currentBuffer ^ 1], TRANSFER_SIZE) ;
         }
       break;
 

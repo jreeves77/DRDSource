@@ -2570,3 +2570,182 @@ void DRD_RET_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size
 
   state -> PeakAvg = sqrtf( state -> PeakSquaredAvg );
 } // DRD_RET__Decoder()
+
+/*******************************************************************************
+* Function: DRD_CHAR_CABDecoder
+*
+* Summary:  Processes the demod data to extract CAB codes.
+*
+* Details: 
+*
+* For 2340 Hz carrier: every 42.7 uS (23.4KHz Hz) Decode Cab Signalling
+*
+* CHAR Cab signalling consists of a carrier at 2340Hz and 
+* modulation is just on/off keying at a particular rate.
+* The algorithm used in a real cab will be closely mirrored here.
+* The signal is sampled at 10 times the carrier (23.4 KHz for 2340 Hz).
+* It is rectified and boxcar averaged over 20 samples.  This will result
+* is a psuedo squarewave of the modulation signal with a small amount of
+* ripple in the on times.  By setting a threshold, the on and off can be
+* easily detected and the possible codes can be decoded.
+*
+* A state machine is used to track the cab state and decode the modulation.
+*
+*******************************************************************************/
+void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size )
+{
+  int j;
+  float32_t sineTemp, cosineTemp;
+
+  for( j = 0;j < BLOCK_SIZE;m++, j++ )
+  {
+    if ( m >= SAMPLE_FREQUENCY )
+    {
+      m = 0;
+
+      state -> currentSineF32 = 0.0;
+      state -> currentCosineF32 = 1.0;
+    }
+
+    SineSamples[j] = data[j]*state -> currentSineF32;
+
+    CosineSamples[j] = data[j]*state -> currentCosineF32;
+
+    sineTemp = state -> currentSineF32*state -> cosinef32 + state -> currentCosineF32*state -> sinef32;
+
+    cosineTemp = state -> currentCosineF32*state -> cosinef32 - state -> currentSineF32*state -> sinef32;
+
+    state -> currentSineF32 = sineTemp;
+
+    state -> currentCosineF32 = cosineTemp;
+  }
+
+  arm_fir_decimate_f32( &FirstSineInstance, SineSamples, FirstInstanceSineOutputs, BLOCK_SIZE );
+  arm_fir_decimate_f32( &FirstCosineInstance, CosineSamples, FirstInstanceCosineOutputs, BLOCK_SIZE );
+
+  arm_fir_decimate_f32( &SecondSineInstance, FirstInstanceSineOutputs, SecondInstanceSineOutputs, BLOCK_SIZE/8 );
+  arm_fir_decimate_f32( &SecondCosineInstance, FirstInstanceCosineOutputs, SecondInstanceCosineOutputs, BLOCK_SIZE/8 );
+
+  for( j = 0;j < BLOCK_SIZE/64;j++ )
+  {
+    state -> SampCount += 1;
+
+    state -> DemodAvg = SecondInstanceSineOutputs[j]*SecondInstanceSineOutputs[j] + SecondInstanceCosineOutputs[j]*SecondInstanceCosineOutputs[j];
+
+    if ( state -> DemodAvg > .998*state -> PeakDemodAvg ) 
+    {
+      state -> PeakDemodAvg = state -> DemodAvg;
+    }
+
+    state -> PeakSquaredAvg = .998f*state -> PeakSquaredAvg + .002f*state -> PeakDemodAvg;
+
+    state -> PeakDemodAvg *= .999;
+
+    // IF current signal sample is "ON".
+
+    if ( state -> DemodAvg >= state -> DemodThreshold )
+    {
+      // Handle change from signal "OFF" to "ON".
+
+      if ( state -> signal_state != 1 )
+      {
+        state -> signal_state = 1;
+        if ( state -> last_cab_on_time != 0 )
+        {
+          state -> check_period = 1;
+        }
+        state -> last_cab_off_time = 64*(state -> SampCount - 1);
+        state -> SampCount = 1;
+      }
+
+      // Check for signal that has been "ON" greater than 555ms.
+
+      if ( 64*(state -> SampCount) >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn )
+      {
+        state -> last_cab_on_time = state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn;
+        state -> last_cab_off_time = 0;
+        state -> SampCount = 1;
+      }
+    }
+    else if ( state -> DemodAvg < state -> DemodThresholdHyst )
+    {
+      // Handle change from signal "ON" to "OFF".
+
+      if ( state -> signal_state != 0 )
+      {
+        state -> signal_state = 0;
+        state -> last_cab_on_time = 64*(state -> SampCount - 1);
+        state -> SampCount = 1;
+      }
+
+      // Set state to No Carrier if signal has been "OFF" greater than 2368ms.
+
+      if ( 64*(state -> SampCount) >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff )
+      {
+        state -> last_cab_off_time = state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff;
+        state -> last_cab_on_time = 0;
+        state -> SampCount = 1;
+      }
+    }
+
+    state -> LastDemodState = state -> DemodState;
+
+    // Determine the current CAB code state based on the ON/OFF times.
+
+    if ( state -> last_cab_on_time >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn )
+    {
+      state -> ScanForPeaks = 1;  // Always scan for peaks with CC.
+      state -> DemodState = DRD_CHAR_CAB_STATE_CONSTANT;
+    }
+    else if ( state -> last_cab_off_time >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff )
+    {
+      // Only clear buffers/states on the transition to NOCARRIER from another state.
+
+      if ( state -> DemodState != DRD_CHAR_CAB_STATE_NOCARRIER )
+      {
+        state -> DemodState = DRD_CHAR_CAB_STATE_NOCARRIER;
+      }
+    }
+    else
+    {
+      if ( state -> check_period )
+      {
+        state -> check_period = 0;
+
+        state -> Period = state -> last_cab_on_time + state -> last_cab_off_time;
+
+        if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_55_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_55_MaxPer )
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_55;
+        }
+        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_45_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_45_MaxPer )
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_45;
+        }
+        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_35_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_35_MaxPer)
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_35;
+        }
+        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_25_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_25_MaxPer )
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_25;
+        }
+        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_15_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_15_MaxPer )
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_15;
+        }
+        else if ( state -> Period > state ->CabTimes.CHAR.DRD_CHAR_05_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_05_MaxPer )
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_05;
+        }
+        else 
+        {
+          state -> DemodState = DRD_CHAR_CAB_STATE_UNKNOWN;
+          state -> ScanForPeaks = 0;         // stop scanning for peaks until a known modulation is present
+        }
+      }
+    }
+  }
+
+  state -> PeakAvg = sqrtf( state -> PeakSquaredAvg );
+} // end DRD_CHAR_CABDecoder()

@@ -475,6 +475,69 @@ void PersonalityInit( struct _drd_state_ *state )
     }
     break;
 
+    case DRD_PERSONALITY_DRD_CHAR:
+    {
+      state -> Mode = DRDPersTable.InitMode;
+      state -> PresFreqIdx = DRDPersTable.InitFreqIdx;
+
+      if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+      {
+        state -> SensorType = DRDPersTable.SensorType2 & 0xFF;
+
+        // gSensDetect set by actual detection since either
+        // shunt is allowed and a scale factor is applied.
+
+        state -> DemodState = AFTC_STATE_NOCARRIER;
+        state -> LastDemodState = AFTC_STATE_NOCARRIER;
+
+        state -> DemodThreshold = DRD_CHAR_AFTC_MIN_DETECT;
+        state -> DemodThresholdHyst = (DRD_CHAR_AFTC_MIN_DETECT * 95) / 100;
+
+        state -> NumFreqs = DRDPersTable.NumFreqs2;
+
+        // populate calibration and offset tables with correct values
+
+        state -> aAmpsGainCalTab = DRDConfig -> AmpsCalibration;
+        state -> aAmpsOffsetCalTab = DRDConfig -> AmpsOffset;
+
+        // populate frequency table with correct values
+
+        for( i = 0; i < MAX_NUM_FREQS; i++ )
+        {
+          state -> aDispFreqTab[i] = DRDPersTable.DispFreqTable2[i];
+        }
+      }
+      else if ( state -> SigType == SIGTYPE_DRD_CHAR_CAB )
+      {
+        state -> SensorType = DRDPersTable.SensorType1 & 0xFF;
+
+        // gSensDetect set by actual detection since either
+        // shunt is allowed and a scale factor is applied.
+
+        state -> DemodState = DRD_CHAR_CAB_STATE_NOCARRIER;
+        state -> LastDemodState = DRD_CHAR_CAB_STATE_NOCARRIER;
+
+        state -> DemodThreshold = DRD_CHAR_CAB_MIN_DETECT;
+        state -> DemodThresholdHyst =  (DRD_CHAR_CAB_MIN_DETECT * 95) / 100;     // about 5% lower low going threshold 
+
+        state -> NumFreqs = DRDPersTable.NumFreqs1;
+
+        // populate calibration and offset tables with correct values
+        // Note this will need modified for units with more than one frequency table
+
+        state -> aAmpsGainCalTab = DRDConfig -> AmpsCalibration;
+        state -> aAmpsOffsetCalTab = DRDConfig -> AmpsOffset;
+
+        // populate frequency tables with correct values
+        // Note this will need modified for units with more than one frequency table
+
+        for( i = 0; i < state -> NumFreqs; i++ )
+        {
+          state -> aDispFreqTab[i] = DRDPersTable.DispFreqTable1[i];
+        }
+      }
+    }
+    break;
   } // end switch(gDRDPersonality)
 } // end PersonalityInit()
 
@@ -920,6 +983,76 @@ void CalculateNewSettings( struct _drd_state_ *state, int FilterInit )
         }
       }
       break;
+
+      case DRD_PERSONALITY_DRD_CHAR:    // Sound Transit
+      {
+        float32_t frequency;
+
+        frequency = state -> aDispFreqTab[state -> PresFreqIdx];
+
+        InitializeProcData( state, frequency );
+
+        /////////////////////////////////////////////
+        // Split here between CAB & AFTC
+        /////////////////////////////////////////////
+	
+        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        {
+          //   Mod A ==> On Time = 300mS, Period = 360mS
+          //   Mod B ==> On Time = 400mS, Period = 460mS
+          //   Mod C ==> On Time = 500mS, Period = 560mS
+
+          // 10% longer than 500 ms = 550 ms
+
+          state -> DemodMaxOnCounts = (val32 * 550) / 1000;
+
+          // 10% longer than 60 ms = 66 ms
+
+          state -> DemodMaxOffCounts = (val32 * 66) / 1000;
+
+          // NOTE: All MaxOn times were set to 15% high instead of 10% high
+          // because the filter has rise and fall times that skew them upwards.
+
+          state -> AFTC_A_MinPer = (val32 * 270) / 1000;    // SR * .300 *  .9 = SR * .270
+          state -> AFTC_A_MaxPer = (val32 * 330) / 1000;    // SR * .300 * 1.1 = SR * .330
+          state -> AFTC_B_MinPer = (val32 * 360) / 1000;    // SR * .400 *  .9 = SR * .360
+          state -> AFTC_B_MaxPer = (val32 * 440) / 1000;    // SR * .400 * 1.1 = SR * .440
+          state -> AFTC_C_MinPer = (val32 * 450) / 1000;    // SR * .500 *  .9 = SR * .450
+          state -> AFTC_C_MaxPer = (val32 * 550) / 1000;    // SR * .500 * 1.1 = SR * .550
+          state -> AFTC_A_MinOn =  (val32 * 216) / 1000;    // SR * .240 *  .9 = SR * .216
+          state -> AFTC_A_MaxOn =  (val32 * 276) / 1000;    // SR * .240 * 1.15 = SR * .276
+          state -> AFTC_B_MinOn =  (val32 * 306) / 1000;    // SR * .340 *  .9 = SR * .306
+          state -> AFTC_B_MaxOn =  (val32 * 391) / 1000;    // SR * .340 * 1.15 = SR * .391
+          state -> AFTC_C_MinOn =  (val32 * 396) / 1000;    // SR * .440 *  .9 = SR * .396 (set a little higher so no overlap with B_MaxOn)
+          state -> AFTC_C_MaxOn =  (val32 * 506) / 1000;    // SR * .440 * 1.15 = SR * .506
+
+          state -> DemodState = AFTC_STATE_NOCARRIER;
+        }
+        else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+        {
+          state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn  = (val32 * 555) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff = (val32 * 1598) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_55_MinPer = (val32 * 82) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_55_MaxPer = (val32 * 102) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_45_MinPer = (val32 * 200) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_45_MaxPer = (val32 * 244) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_35_MinPer = (val32 * 300) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_35_MaxPer = (val32 * 368) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_25_MinPer = (val32 * 450) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_25_MaxPer = (val32 * 550) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_15_MinPer = (val32 * 720) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_15_MaxPer = (val32 * 880) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_05_MinPer = (val32 * 132) / 1000;
+          state -> CabTimes.CHAR.DRD_CHAR_05_MaxPer = (val32 * 160) / 1000;
+
+          // Setup a short window (~20msCHACHAReak detection during modulation
+          // that starts ~2ms after a logic '1' is decoded.  This allows
+          // current to be measured during modulation.
+
+          state -> DemodState = DRD_CHAR_CAB_STATE_UNKNOWN;
+        }
+      }
+      break;
     }
   } // end switch(gDRDPersonality)
 } // end CalculateNewSettings()
@@ -947,7 +1080,7 @@ void DoBatteryTest( struct _drd_state_ *state )
   // Put up splash screen on LCD
 
   LCD_Clrscr( state );
-  sprintf(lcdbuf, "%s    %s", DRDPersTable.Title, VERSION);
+  sprintf(lcdbuf, "%s   %s", DRDPersTable.Title, VERSION);
 
   sprintf(output, "\r\n%s",lcdbuf);
   SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
@@ -1618,62 +1751,182 @@ void PrintState(struct _drd_state_ *state, int State)
           switch( State )
           {
             case DRD_RET_CAB_STATE_MULTIPLE:
-              sprintf(output, "CAB_MULTI");
+              sprintf(output, "ATP_MULTI");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_NOCARRIER:
-              sprintf(output, "CAB_NOCAR");
+              sprintf(output, "ATP_NOCAR");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_UNKNOWN:
-              sprintf(output, "CAB_UNK");
+              sprintf(output, "ATP_UNK");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_0A:
-              sprintf(output, "CAB_0A");
+              sprintf(output, "ATP_0A");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_10A:
-              sprintf(output, "CAB_10A");
+              sprintf(output, "ATP_10A");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_20P:
-              sprintf(output, "CAB_20P");
+              sprintf(output, "ATP_20P");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_60G:
-              sprintf(output, "CAB_60G");
+              sprintf(output, "ATP_60G");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_35G:
-              sprintf(output, "CAB_35G");
+              sprintf(output, "ATP_35G");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_50ROZ:
-              sprintf(output, "CAB_50ROZ");
+              sprintf(output, "ATP_50ROZ");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_50ST:
-              sprintf(output, "CAB_50ST");
+              sprintf(output, "ATP_50ST");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_70G:
-              sprintf(output, "CAB_70G");
+              sprintf(output, "ATP_70G");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
             case DRD_RET_CAB_STATE_80G:
-              sprintf(output, "CAB_80G");
+              sprintf(output, "ATP_80G");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            default:
+              sprintf(output, "ATP_UH_OH");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+          }
+        }
+      }
+      break;
+
+      case DRD_PERSONALITY_DRD_CHAR:
+      {
+        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        {
+          switch( State )
+          {
+            case AFTC_STATE_NOCARRIER:
+              sprintf(output, "AFTC_NOCAR");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_UNKNOWN_1:
+              sprintf(output, "AFTC_UNK_1");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_UNKNOWN_0:
+              sprintf(output, "AFTC_UNK_0");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_CONSTANT:
+              sprintf(output, "AFTC_CONST");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_C_1:
+              sprintf(output, "AFTC_C_1");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_C_0:
+              sprintf(output, "AFTC_C_0");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_B_1:
+              sprintf(output, "AFTC_B_1");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_B_0:
+              sprintf(output, "AFTC_B_0");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_A_1:
+              sprintf(output, "AFTC_A_1");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case AFTC_STATE_A_0:
+              sprintf(output, "AFTC_A_0");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            default:
+              sprintf(output, "AFTC_UH_OH");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+          }
+        }
+        else if ( state -> SigType == SIGTYPE_DRD_CHAR_CAB )
+        {
+          switch( State )
+          {
+            case DRD_CHAR_CAB_STATE_CONSTANT:
+              sprintf(output, "CAB_CONST");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_NOCARRIER:
+              sprintf(output, "CAB_NOCAR");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_UNKNOWN:
+              sprintf(output, "CAB_UNK");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_55:
+              sprintf(output, "CAB_55");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_45:
+              sprintf(output, "CAB_45");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_35:
+              sprintf(output, "CAB_35");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_25:
+              sprintf(output, "CAB_25");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_15:
+              sprintf(output, "CAB_15");
+              SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
+            break;
+
+            case DRD_CHAR_CAB_STATE_05:
+              sprintf(output, "CAB_05");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
@@ -1685,6 +1938,7 @@ void PrintState(struct _drd_state_ *state, int State)
         }
       }
       break;
+
     } // end switch(gDRDPersonality)
 } // end PrintState()
 
@@ -2123,7 +2377,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
       {
         val32 = 0;
 
-	sprintf( dispbuf, "UNKNOWN" );
+	sprintf( dispbuf, "0.00   " );
       }
       else
       {
@@ -2192,6 +2446,87 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 	    sprintf( dispbuf, "%3.2f   ", val32f );
 	  }
         }
+      }
+    }
+    break;
+
+    case DRD_PERSONALITY_DRD_CHAR:
+    {
+      // The ADC has a full scale range of +-5V. The sample value passed in (ampsval)
+      // represents the averaged value of the rectified peak voltage from the ADC.
+      // 
+      // The ADC is 14-bits with the MSB being a sign bit, therefore each
+      // bit from the A/D represents 0.610mV of peak voltage. ==> +5V / (2^13 - 1)
+      //
+      // This system uses a .2ohm shunt. (in parallel with 0.5ohm for an equivalent 
+      // resistance of 0.1429ohm.)
+      //
+      // Vpeak * 0.7071 = Vrms
+      //
+      // ampsval * 0.61 * 0.707  = Vrms,   (Vrms / 0.2) = Scaled Irms
+      // ampsval * 2.16 = Irms
+      //
+      ////////////////////////////////////////////////////////////////////////////
+
+      if ( !state -> Calibrating && (((state -> SigType == SIGTYPE_DRD_CHAR_AFTC) && ((state -> DemodState == AFTC_STATE_NOCARRIER) ||
+	 				                                (state -> DemodState == AFTC_STATE_UNKNOWN_0) ||
+						                        (state -> DemodState == AFTC_STATE_UNKNOWN_1))) ||
+
+                               ((state -> SigType == SIGTYPE_DRD_CHAR_CAB) && ((state -> DemodState == DRD_CHAR_CAB_STATE_UNKNOWN) ||
+	                                                               (state -> DemodState == DRD_CHAR_CAB_STATE_NOCARRIER)))) )
+      {
+        val32 = 0;
+
+	sprintf( dispbuf, "UNKNOWN" );
+      }
+      else
+      {
+        // Apply offset
+	
+        if ( ampsval >= state -> PresAmpsOffsetCal)
+        {
+          ampsval -= state -> PresAmpsOffsetCal;
+        }
+        else
+        {
+          ampsval = 0;
+        }
+
+        // Scale value here is primarily based on above formula and then
+        // adjusted as needed to get the desired measurement in the lab.
+	
+        val32 = ampsval * 165;    // for 0.25 Shunt.
+
+        // The DRD-CHAR signals are gained by 4 to attain desired decoding
+        // thresholds. (need to adjust the displayed value back down.)
+	
+        val32 = val32 / 4;
+
+        rem32 = val32 % 100;
+        val32 = val32 / 100;
+
+        if ( rem32 >= 50 )        // see if needs rounded up
+        {
+          val32++;
+        }
+
+        // scale by calibration factor
+	
+        val32f = (val32 * state -> PresAmpsGainCal)/1000.0;
+
+	if ( val32f >= 2.600 )
+	{
+          sprintf( dispbuf, " OVER  " );
+	}
+	else
+	{
+          // for DRD-CHAR displayed amps will be from 0.00 to 10.00
+          // this is represented by 0 to 1000 in val32
+          //UIF32ToAsciiFloat(val32, numbuf,6, 3, 1);
+          //isprintf(dispbuf,"%s ",numbuf);
+
+	  sprintf( dispbuf, "%3.3f  ", val32f );
+	}
       }
     }
     break;
@@ -2591,11 +2926,11 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
         }
 	else if ( state -> DemodState == AFTC_STATE_CONSTANT )
 	{
-          sprintf(dispbuf, "CONSTANT  ");
+          sprintf(dispbuf, "Error     ");
 	}
         else
         {
-          sprintf(dispbuf, "UNKNOWN   ");
+          sprintf(dispbuf, "Error     ");
         }
       }
       else // (gSigType == SIGTYPE_DRD_RET_CAB)
@@ -2738,6 +3073,79 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
       }
     }
     break;
+
+    case DRD_PERSONALITY_DRD_CHAR:
+    {
+      if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+      {
+        if ( state -> DemodState & AFTC_STATE_A_0 )
+        {
+          sprintf(dispbuf, "MOD A   ");
+        }
+        else if ( state -> DemodState & AFTC_STATE_B_0 )
+        {
+          sprintf(dispbuf, "MOD B   ");
+        }
+        else if ( state -> DemodState & AFTC_STATE_C_0 )
+        {
+          sprintf(dispbuf, "MOD C   ");
+        }
+	else if ( state -> DemodState == AFTC_STATE_CONSTANT )
+	{
+          sprintf(dispbuf, "CONSTANT  ");
+	}
+        else
+        {
+          sprintf(dispbuf, "UNKNOWN   ");
+        }
+      }
+      else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+      {
+        switch ( state -> DemodState ) // Cab LCD Display
+        {
+          case DRD_CHAR_CAB_STATE_CONSTANT:
+            sprintf(dispbuf, "CONSTANT  ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_NOCARRIER:
+            sprintf(dispbuf, "NO CODE   ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_UNKNOWN:
+            sprintf(dispbuf, "UNKNOWN   ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_55:
+            sprintf(dispbuf, "55 MPH    ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_45:
+            sprintf(dispbuf, "45 MPH    ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_35:
+            sprintf(dispbuf, "35 MPH    ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_25:
+            sprintf(dispbuf, "25 MPH    ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_15:
+            sprintf(dispbuf, "15 MPH    ");
+          break;
+
+          case DRD_CHAR_CAB_STATE_05:
+            sprintf(dispbuf, " 5 MPH    ");
+          break;
+
+          default:
+            sprintf(dispbuf, "ST=%X    ", state -> DemodState);   // should never happen, would like to know if it does!
+          break;
+        }
+      }
+    }
+    break;
   } // end switch(gDRDPersonality)
 } // end GetCorrectCodeForDisplay()
 
@@ -2767,6 +3175,7 @@ void GetCorrectDutyForDisplay( struct _drd_state_ *state, char *dispbuf )
     }
     break;
 
+    case DRD_PERSONALITY_DRD_CHAR:
     case DRD_PERSONALITY_DRD_MFOR:
     {
       // DRD_MFOR does not display duty cycle.
@@ -2922,6 +3331,7 @@ void GetFreqForDisplay( struct _drd_state_ *state, char *dispbuf )
     }
     break;
 
+    case DRD_PERSONALITY_DRD_CHAR:
     case DRD_PERSONALITY_DRD_MFOR:
     {
       sprintf(dispbuf, "%4dHZ", state -> PresDispFreq);
@@ -3489,17 +3899,17 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
 
             if ( state -> PowerSaveEnable == 1 )
             {
-              sprintf(dispbuf, "%s AFTC CODE", tbuf);
+              sprintf(dispbuf, "%sAFTC CODE", tbuf);
             }
             else
             {
               if ( state -> PowerSaveEnable == 2 )
               {
-                sprintf(dispbuf, "%s AFTC#CODE", tbuf);
+                sprintf(dispbuf, "%sAFTC#CODE", tbuf);
               }
               else
               {
-                sprintf(dispbuf, "%s AFTC*CODE", tbuf);
+                sprintf(dispbuf, "%sAFTC*CODE", tbuf);
               }
             }
           }
@@ -3562,6 +3972,137 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
 
             if ( state -> PowerSaveEnable == 1 )
             {
+              sprintf(dispbuf, "%sAFTC AMPS", tbuf);
+            }
+            else
+            {
+              if ( state -> PowerSaveEnable == 2 )
+              {
+                sprintf(dispbuf, "%sAFTC#AMPS", tbuf);
+              }
+              else
+              {
+                sprintf(dispbuf, "%sAFTC*AMPS", tbuf);
+              }
+            }
+          }
+        }
+        else // (gSigType == SIGTYPE_DRD_RET_CAB)
+        {
+          //   1234567890123456
+          // --------------------
+          // | 10.00 Arms       |
+          // | 2340HZ  CAB AMPS |
+          // --------------------
+
+          if ( Line == 1 )
+          {
+            sprintf(dispbuf, "        %s   ", DRDPersTable.AmpsUnits1);
+          }
+          else
+          {
+            GetFreqForDisplay(state, tbuf);
+
+            if ( state -> PowerSaveEnable == 1 )
+            {
+              sprintf(dispbuf, "%s  ATP AMPS", tbuf);
+            }
+            else
+            {
+              if ( state -> PowerSaveEnable == 2 )
+              {
+                sprintf(dispbuf, "%s  ATP#AMPS", tbuf);
+              }
+              else
+              {
+                sprintf(dispbuf, "%s  ATP*AMPS", tbuf);
+              }
+            }
+          }
+        }
+      }
+    }
+    break;
+
+    case DRD_PERSONALITY_DRD_CHAR:
+    {
+      if ( Mode == MODE_CODE )
+      {
+        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        {
+          if ( Line == 1 )
+          {
+            sprintf(dispbuf, "                ");
+          }
+          else
+          {
+            GetFreqForDisplay(state, tbuf);
+
+            if ( state -> PowerSaveEnable == 1 )
+            {
+              sprintf(dispbuf, "%s AFTC CODE", tbuf);
+            }
+            else
+            {
+              if ( state -> PowerSaveEnable == 2 )
+              {
+                sprintf(dispbuf, "%s AFTC#CODE", tbuf);
+              }
+              else
+              {
+                sprintf(dispbuf, "%s AFTC*CODE", tbuf);
+              }
+            }
+          }
+        }
+        else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+        {
+          //   1234567890123456
+          // --------------------
+          // | NO CARRIER       |
+          // | 2340HZ CAB CODE  |
+          // --------------------
+
+          if ( Line == 1 )
+          {
+            sprintf(dispbuf, "                ");
+          }
+          else
+          {
+            GetFreqForDisplay(state, tbuf);
+
+            if ( state -> PowerSaveEnable == 1 )
+            {
+              sprintf(dispbuf, "%s  CAB CODE", tbuf);
+            }
+            else
+            {
+              if ( state -> PowerSaveEnable == 2 )
+              {
+                sprintf(dispbuf, "%s  CAB#CODE", tbuf);
+              }
+              else
+              {
+                sprintf(dispbuf, "%s  CAB*CODE", tbuf);
+              }
+            }
+          }
+        }
+      }
+      else // (Mode == MODE_MEAS)
+      {
+        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        {
+          if ( Line == 1 )
+          {
+            sprintf(dispbuf, "        %s    ", DRDPersTable.AmpsUnits2);
+          }
+          else
+          {
+            GetFreqForDisplay(state, tbuf);
+
+            if ( state -> PowerSaveEnable == 1 )
+            {
               sprintf(dispbuf, "%s AFTC AMPS", tbuf);
             }
             else
@@ -3577,7 +4118,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
             }
           }
         }
-        else // (gSigType == SIGTYPE_DRD_RET_CAB)
+        else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
         {
           //   1234567890123456
           // --------------------
@@ -3686,6 +4227,19 @@ void GetMeasUnits( struct _drd_state_ *state, char *textbuf )
         sprintf(textbuf, "%s", DRDPersTable.AmpsUnits2);
       }
       else if ( state -> SigType == SIGTYPE_DRD_RET_CAB )
+      {
+        sprintf(textbuf, "%s", DRDPersTable.AmpsUnits1);
+      }
+    }
+    break;
+
+    case DRD_PERSONALITY_DRD_CHAR:
+    {
+      if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+      {
+        sprintf(textbuf, "%s", DRDPersTable.AmpsUnits2);
+      }
+      else if ( state -> SigType == SIGTYPE_DRD_CHAR_CAB )
       {
         sprintf(textbuf, "%s", DRDPersTable.AmpsUnits1);
       }
