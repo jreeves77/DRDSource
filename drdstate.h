@@ -7,9 +7,9 @@
 // #define _TEST_
 
 #ifdef _TEST_
-#define VERSION "T2.35"
+#define VERSION "T2.41"
 #else
-#define VERSION "V2.35"
+#define VERSION "V2.41"
 #endif
 
 #define SAMPLE_FREQUENCY (6000000/256.0)
@@ -62,8 +62,8 @@
 #define CAB_STATE_270_1     0x03    // 00_0011  0x03
 #define CAB_STATE_270_0     0x02    // 00_0010  0x02
 
-#define BART_MIN_DETECT_SC      1000000
-#define BART_MIN_DETECT_MV      67600 // Decode in mV mode uses a higher value to obtain the desired 50mVpp thresh
+#define BART_MIN_DETECT_SC      625
+#define BART_MIN_DETECT_MV      625 // Decode in mV mode uses a higher value to obtain the desired 50mVpp thresh
 
 #define DRD11_MIN_DETECT        33124
 
@@ -73,8 +73,8 @@
 #define DRD_MFOR_CAB_MIN_DETECT 11025  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
 #define DRD_MFOR_AFTC_MIN_DETECT 10000 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
 
-#define DRD_CHAR_CAB_MIN_DETECT 11025  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
-#define DRD_CHAR_AFTC_MIN_DETECT 10000 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
+#define DRD_CATS_CAB_MIN_DETECT 1024  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
+#define DRD_CATS_AFTC_MIN_DETECT 931 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
 
 #define DRD_STL_CAB_MIN_DETECT 1024  // around .125 Scaled Arms w/ equiv 0.14-ohm & 4x HW gain on input.
 #define DRD_STL_AFTC_MIN_DETECT 931 // 4225  // around .080 Scaled Arms w/ equiv 0.14-ohm shunt 
@@ -124,16 +124,16 @@
 #define DRD_MFOR_CAB_STATE_10        10
 #define DRD_MFOR_CAB_STATE_0         11
 
-// DRD_CHAR CAB Codes Detection MIN/MAX thresholds, decoding states, etc.
-#define DRD_CHAR_CAB_STATE_CONSTANT  1
-#define DRD_CHAR_CAB_STATE_NOCARRIER 2
-#define DRD_CHAR_CAB_STATE_UNKNOWN   3
-#define DRD_CHAR_CAB_STATE_55        4
-#define DRD_CHAR_CAB_STATE_45        5
-#define DRD_CHAR_CAB_STATE_35        6
-#define DRD_CHAR_CAB_STATE_25        7
-#define DRD_CHAR_CAB_STATE_15        8
-#define DRD_CHAR_CAB_STATE_05        9
+// DRD_CATS CAB Codes Detection MIN/MAX thresholds, decoding states, etc.
+#define DRD_CATS_CAB_STATE_CONSTANT  1
+#define DRD_CATS_CAB_STATE_NOCARRIER 2
+#define DRD_CATS_CAB_STATE_UNKNOWN   3
+#define DRD_CATS_CAB_STATE_55        4
+#define DRD_CATS_CAB_STATE_45        5
+#define DRD_CATS_CAB_STATE_35        6
+#define DRD_CATS_CAB_STATE_25        7
+#define DRD_CATS_CAB_STATE_15        8
+#define DRD_CATS_CAB_STATE_10        9
 
 // DRD_RET CAB Codes Detection MIN/MAX thresholds, decoding states, etc.
 #define DRD_RET_CAB_STATE_NOCARRIER  0
@@ -185,8 +185,8 @@ typedef enum
   SIGTYPE_DRD_RET_AFTC,
   SIGTYPE_DRD_STL_CAB,
   SIGTYPE_DRD_STL_AFTC,
-  SIGTYPE_DRD_CHAR_CAB,
-  SIGTYPE_DRD_CHAR_AFTC,
+  SIGTYPE_DRD_CATS_CAB,
+  SIGTYPE_DRD_CATS_AFTC,
   NUMBER_OF_SIGNAL_TYPES
 } DRDSignalTypes;
 
@@ -198,7 +198,7 @@ typedef enum
   DRD_PERSONALITY_DRD_MFOR, // Metro
   DRD_PERSONALITY_DRD_RET,  // Rotterdam
   DRD_PERSONALITY_DRD_STL,
-  DRD_PERSONALITY_DRD_CHAR,
+  DRD_PERSONALITY_DRD_CATS,
   PERS_TAB_SZ
 } DRDPersonalities;
 
@@ -409,20 +409,20 @@ struct _stl_times
 
 struct _char_times
 {
-  uint16_t DRD_CHAR_CAB_MaxOn;
-  uint16_t DRD_CHAR_CAB_MaxOff;
-  uint16_t DRD_CHAR_55_MinPer;
-  uint16_t DRD_CHAR_55_MaxPer;
-  uint16_t DRD_CHAR_45_MinPer;
-  uint16_t DRD_CHAR_45_MaxPer;
-  uint16_t DRD_CHAR_35_MinPer;
-  uint16_t DRD_CHAR_35_MaxPer;
-  uint16_t DRD_CHAR_25_MinPer;
-  uint16_t DRD_CHAR_25_MaxPer;
-  uint16_t DRD_CHAR_15_MinPer;
-  uint16_t DRD_CHAR_15_MaxPer;
-  uint16_t DRD_CHAR_05_MinPer;
-  uint16_t DRD_CHAR_05_MaxPer;
+  uint16_t DRD_CATS_CAB_MaxOn;
+  uint16_t DRD_CATS_CAB_MaxOff;
+  uint16_t DRD_CATS_55_MinPer;
+  uint16_t DRD_CATS_55_MaxPer;
+  uint16_t DRD_CATS_45_MinPer;
+  uint16_t DRD_CATS_45_MaxPer;
+  uint16_t DRD_CATS_35_MinPer;
+  uint16_t DRD_CATS_35_MaxPer;
+  uint16_t DRD_CATS_25_MinPer;
+  uint16_t DRD_CATS_25_MaxPer;
+  uint16_t DRD_CATS_15_MinPer;
+  uint16_t DRD_CATS_15_MaxPer;
+  uint16_t DRD_CATS_10_MinPer;
+  uint16_t DRD_CATS_10_MaxPer;
 };
 
 struct _drd_state_
@@ -485,7 +485,7 @@ struct _drd_state_
     struct _row_times   ROW;
     struct _mfor_times  MFOR;
     struct _stl_times   STL;
-    struct _char_times  CHAR;
+    struct _char_times  CATS;
   } CabTimes;
   uint16_t AFTC_A_MinPer;
   uint16_t AFTC_A_MaxPer;

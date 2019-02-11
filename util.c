@@ -475,12 +475,12 @@ void PersonalityInit( struct _drd_state_ *state )
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     {
       state -> Mode = DRDPersTable.InitMode;
       state -> PresFreqIdx = DRDPersTable.InitFreqIdx;
 
-      if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+      if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
       {
         state -> SensorType = DRDPersTable.SensorType2 & 0xFF;
 
@@ -490,8 +490,8 @@ void PersonalityInit( struct _drd_state_ *state )
         state -> DemodState = AFTC_STATE_NOCARRIER;
         state -> LastDemodState = AFTC_STATE_NOCARRIER;
 
-        state -> DemodThreshold = DRD_CHAR_AFTC_MIN_DETECT;
-        state -> DemodThresholdHyst = (DRD_CHAR_AFTC_MIN_DETECT * 95) / 100;
+        state -> DemodThreshold = DRD_CATS_AFTC_MIN_DETECT;
+        state -> DemodThresholdHyst = (DRD_CATS_AFTC_MIN_DETECT * 95) / 100;
 
         state -> NumFreqs = DRDPersTable.NumFreqs2;
 
@@ -507,18 +507,18 @@ void PersonalityInit( struct _drd_state_ *state )
           state -> aDispFreqTab[i] = DRDPersTable.DispFreqTable2[i];
         }
       }
-      else if ( state -> SigType == SIGTYPE_DRD_CHAR_CAB )
+      else if ( state -> SigType == SIGTYPE_DRD_CATS_CAB )
       {
         state -> SensorType = DRDPersTable.SensorType1 & 0xFF;
 
         // gSensDetect set by actual detection since either
         // shunt is allowed and a scale factor is applied.
 
-        state -> DemodState = DRD_CHAR_CAB_STATE_NOCARRIER;
-        state -> LastDemodState = DRD_CHAR_CAB_STATE_NOCARRIER;
+        state -> DemodState = DRD_CATS_CAB_STATE_NOCARRIER;
+        state -> LastDemodState = DRD_CATS_CAB_STATE_NOCARRIER;
 
-        state -> DemodThreshold = DRD_CHAR_CAB_MIN_DETECT;
-        state -> DemodThresholdHyst =  (DRD_CHAR_CAB_MIN_DETECT * 95) / 100;     // about 5% lower low going threshold 
+        state -> DemodThreshold = DRD_CATS_CAB_MIN_DETECT;
+        state -> DemodThresholdHyst =  (DRD_CATS_CAB_MIN_DETECT * 95) / 100;     // about 5% lower low going threshold 
 
         state -> NumFreqs = DRDPersTable.NumFreqs1;
 
@@ -585,20 +585,9 @@ void CalculateNewSettings( struct _drd_state_ *state, int FilterInit )
     {
       float32_t frequency, frequency0;
 
-      if ( state -> aDispFreqTab[state -> PresFreqIdx] & 1 )
-      {
-        frequency = state -> aDispFreqTab[state -> PresFreqIdx];
+      frequency = state -> aDispFreqTab[state -> PresFreqIdx];
 
-        frequency0 = state -> aDispFreqTab[state -> PresFreqIdx ^ 1];
-      }
-      else
-      {
-        frequency = state -> aDispFreqTab[state -> PresFreqIdx | 1];
-
-        frequency0 = state -> aDispFreqTab[state -> PresFreqIdx];
-      }
-
-      InitializeDFTFilters( frequency, frequency0, SAMPLE_FREQUENCY );
+      InitializeProcData( state, frequency );
 
       // Originally the display update rate was exactly one second.
       //
@@ -627,27 +616,6 @@ void CalculateNewSettings( struct _drd_state_ *state, int FilterInit )
       state -> DemodOneBit = state -> PeakSampRate / 18;      // time for 18 Hz (1 bit time)
       state -> DemodShiftCount = 0;
       state -> DemodShiftState = 0;
-
-      // Now determine the size of the secondary peak averaging buffer
-      // for the present frequency.  It should yield an overall averaging
-      // window of between .5 and 1 seconds with the primary and secondary
-      // averages.
-      ////////////////////////////////////////////////////////////////////
-
-      val32 = state -> PresDispFreq >> 6;      // this is the greatly simplified formula for the number of
-                                        // secondary averages to produce a total window of .5 to 1 sec
-                                        // really: NUM_AVGS = 1 / ( (1/2xFREQ) x 128)
-      num_avgs = 1;
-
-      // now shift until only 1 bit remains and count
-      // the number of shifts and calc the number of
-      // averages
-
-      while(val32 > 1)
-      {
-        val32 >>= 1;
-        num_avgs <<= 1;
-      }
     }
     break;
 
@@ -984,7 +952,7 @@ void CalculateNewSettings( struct _drd_state_ *state, int FilterInit )
       }
       break;
 
-      case DRD_PERSONALITY_DRD_CHAR:    // Sound Transit
+      case DRD_PERSONALITY_DRD_CATS:    // Sound Transit
       {
         float32_t frequency;
 
@@ -996,7 +964,7 @@ void CalculateNewSettings( struct _drd_state_ *state, int FilterInit )
         // Split here between CAB & AFTC
         /////////////////////////////////////////////
 	
-        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
         {
           //   Mod A ==> On Time = 300mS, Period = 360mS
           //   Mod B ==> On Time = 400mS, Period = 460mS
@@ -1028,28 +996,28 @@ void CalculateNewSettings( struct _drd_state_ *state, int FilterInit )
 
           state -> DemodState = AFTC_STATE_NOCARRIER;
         }
-        else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+        else // (gSigType == SIGTYPE_DRD_CATS_CAB)
         {
-          state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn  = (val32 * 555) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff = (val32 * 1598) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_55_MinPer = (val32 * 82) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_55_MaxPer = (val32 * 102) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_45_MinPer = (val32 * 200) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_45_MaxPer = (val32 * 244) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_35_MinPer = (val32 * 300) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_35_MaxPer = (val32 * 368) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_25_MinPer = (val32 * 450) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_25_MaxPer = (val32 * 550) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_15_MinPer = (val32 * 720) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_15_MaxPer = (val32 * 880) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_05_MinPer = (val32 * 132) / 1000;
-          state -> CabTimes.CHAR.DRD_CHAR_05_MaxPer = (val32 * 160) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_CAB_MaxOn  = (val32 * 555) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_CAB_MaxOff = (val32 * 1598) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_55_MinPer = (val32 * 83) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_55_MaxPer = (val32 * 102) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_45_MinPer = (val32 * 200) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_45_MaxPer = (val32 * 244) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_35_MinPer = (val32 * 300) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_35_MaxPer = (val32 * 368) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_25_MinPer = (val32 * 450) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_25_MaxPer = (val32 * 550) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_15_MinPer = (val32 * 720) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_15_MaxPer = (val32 * 880) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_10_MinPer = (val32 * 131) / 1000;
+          state -> CabTimes.CATS.DRD_CATS_10_MaxPer = (val32 * 161) / 1000;
 
           // Setup a short window (~20msCHACHAReak detection during modulation
           // that starts ~2ms after a logic '1' is decoded.  This allows
           // current to be measured during modulation.
 
-          state -> DemodState = DRD_CHAR_CAB_STATE_UNKNOWN;
+          state -> DemodState = DRD_CATS_CAB_STATE_UNKNOWN;
         }
       }
       break;
@@ -1819,9 +1787,9 @@ void PrintState(struct _drd_state_ *state, int State)
       }
       break;
 
-      case DRD_PERSONALITY_DRD_CHAR:
+      case DRD_PERSONALITY_DRD_CATS:
       {
-        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
         {
           switch( State )
           {
@@ -1881,52 +1849,52 @@ void PrintState(struct _drd_state_ *state, int State)
             break;
           }
         }
-        else if ( state -> SigType == SIGTYPE_DRD_CHAR_CAB )
+        else if ( state -> SigType == SIGTYPE_DRD_CATS_CAB )
         {
           switch( State )
           {
-            case DRD_CHAR_CAB_STATE_CONSTANT:
+            case DRD_CATS_CAB_STATE_CONSTANT:
               sprintf(output, "CAB_CONST");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_NOCARRIER:
+            case DRD_CATS_CAB_STATE_NOCARRIER:
               sprintf(output, "CAB_NOCAR");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_UNKNOWN:
+            case DRD_CATS_CAB_STATE_UNKNOWN:
               sprintf(output, "CAB_UNK");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_55:
+            case DRD_CATS_CAB_STATE_55:
               sprintf(output, "CAB_55");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_45:
+            case DRD_CATS_CAB_STATE_45:
               sprintf(output, "CAB_45");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_35:
+            case DRD_CATS_CAB_STATE_35:
               sprintf(output, "CAB_35");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_25:
+            case DRD_CATS_CAB_STATE_25:
               sprintf(output, "CAB_25");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_15:
+            case DRD_CATS_CAB_STATE_15:
               sprintf(output, "CAB_15");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
-            case DRD_CHAR_CAB_STATE_05:
-              sprintf(output, "CAB_05");
+            case DRD_CATS_CAB_STATE_10:
+              sprintf(output, "CAB_10");
               SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
             break;
 
@@ -2016,14 +1984,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 
       if ( state -> SigType == SIGTYPE_BARTSC )
       {
-        val32 = ampsval * 1917;      // 1844;
-        rem32 = val32 % 10000;
-        val32 /= 10000;
-
-        if ( rem32 >= 5000 )
-        {
-          val32++;
-        }
+        val32 = ampsval * 2129;      // 1844;
 
         //val32= ampsval / 6;
         //rem32= ampsval % 6;
@@ -2032,32 +1993,30 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 
         // scale by calibration factor
 	
-        val32f = (val32 * state -> PresAmpsGainCal) / 1000.0;
+        val32f = (val32 * state -> PresAmpsGainCal)/1000.;
+
+
+        val32f *= 1.0  + (1.1876e-9*state -> PresDispFreq - 5.1594e-6)*state -> PresDispFreq;
 
         //isprintf(dispbuf,"%4d %s", val32, gPersTable[gDRDPersonality].AmpsUnits1);
-        sprintf(dispbuf, "%3.3f", val32f);
+        sprintf(dispbuf, "%4.0f", val32f);
       }
       else if ( state -> SigType == SIGTYPE_BARTMV )
       {
         //val32= ampsval * 928;     // yields approx mVpk
-        val32 = ampsval * 653;       // yields approx mVrms
-        rem32 = val32 % 10000;
-        val32 /= 10000;
-
-        if ( rem32 >= 5000 )
-        {
-          val32++;
-        }
+        val32 = ampsval * 77;       // yields approx mVrms
 
         // scale by calibration factor
 	
-        val32f = (val32 * state -> PresAmpsGainCal) / 1000.0;
+        val32f = (val32 * state -> PresAmpsGainCal)/1000.0;
+
+        val32f *= 1.0  + (1.1876e-9*state -> PresDispFreq - 5.1594e-6)*state -> PresDispFreq;
 
         //isprintf(dispbuf,"%4d %s", val32, gPersTable[gDRDPersonality].AmpsUnits1);
         //isprintf(dispbuf,"%4d", val32);
         //UIF32ToAsciiFloat(val32, numbuf, 5, 1, 1);
         //isprintf(dispbuf,"%s",numbuf);
-	sprintf( dispbuf, "%3.3", val32f );
+	sprintf( dispbuf, "%3.1f", val32f );
       }
     }
     break;
@@ -2251,7 +2210,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 	
         val32f = (val32 * state -> PresAmpsGainCal)/1000.0;
 
-	if ( val32f >= 2.600 )
+	if ( val32f >= 6.000 )
 	{
           sprintf( dispbuf, " OVER  " );
 	}
@@ -2450,7 +2409,7 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     {
       // The ADC has a full scale range of +-5V. The sample value passed in (ampsval)
       // represents the averaged value of the rectified peak voltage from the ADC.
@@ -2468,21 +2427,31 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
       //
       ////////////////////////////////////////////////////////////////////////////
 
-      if ( !state -> Calibrating && (((state -> SigType == SIGTYPE_DRD_CHAR_AFTC) && ((state -> DemodState == AFTC_STATE_NOCARRIER) ||
+      if ( !state -> Calibrating && (((state -> SigType == SIGTYPE_DRD_CATS_AFTC) && ((state -> DemodState == AFTC_STATE_NOCARRIER) ||
 	 				                                (state -> DemodState == AFTC_STATE_UNKNOWN_0) ||
 						                        (state -> DemodState == AFTC_STATE_UNKNOWN_1))) ||
 
-                               ((state -> SigType == SIGTYPE_DRD_CHAR_CAB) && ((state -> DemodState == DRD_CHAR_CAB_STATE_UNKNOWN) ||
-	                                                               (state -> DemodState == DRD_CHAR_CAB_STATE_NOCARRIER)))) )
+                               ((state -> SigType == SIGTYPE_DRD_CATS_CAB) && ((state -> DemodState == DRD_CATS_CAB_STATE_UNKNOWN) ||
+	                                                               (state -> DemodState == DRD_CATS_CAB_STATE_NOCARRIER)))) )
       {
         val32 = 0;
 
-	sprintf( dispbuf, "UNKNOWN" );
+        if ( ((state -> DemodState == AFTC_STATE_NOCARRIER) && (state -> SigType == SIGTYPE_DRD_CATS_AFTC)) ||
+             ((state -> DemodState == DRD_CATS_CAB_STATE_NOCARRIER) && (state -> SigType == SIGTYPE_DRD_CATS_CAB)) )
+        {
+	  sprintf( dispbuf, "UNKNOWN     " );
+        }
+        else
+        {
+	  sprintf( dispbuf, "INVALID CODE" );
+        }
       }
       else
       {
         // Apply offset
 	
+        BuildBaseDisplay( state, MODE_MEAS, 1, dispbuf );
+
         if ( ampsval >= state -> PresAmpsOffsetCal)
         {
           ampsval -= state -> PresAmpsOffsetCal;
@@ -2495,9 +2464,9 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
         // Scale value here is primarily based on above formula and then
         // adjusted as needed to get the desired measurement in the lab.
 	
-        val32 = ampsval * 165;    // for 0.25 Shunt.
+        val32 = ampsval * 488;    // for 0.25 Shunt.
 
-        // The DRD-CHAR signals are gained by 4 to attain desired decoding
+        // The DRD-CATS signals are gained by 4 to attain desired decoding
         // thresholds. (need to adjust the displayed value back down.)
 	
         val32 = val32 / 4;
@@ -2514,19 +2483,21 @@ float32_t GetCorrectAmpsForDisplay( struct _drd_state_ *state, char *dispbuf, ui
 	
         val32f = (val32 * state -> PresAmpsGainCal)/1000.0;
 
-	if ( val32f >= 2.600 )
+	if ( val32f >= 6.000 )
 	{
           sprintf( dispbuf, " OVER  " );
 	}
 	else
 	{
-          // for DRD-CHAR displayed amps will be from 0.00 to 10.00
+          // for DRD-CATS displayed amps will be from 0.00 to 10.00
           // this is represented by 0 to 1000 in val32
           //UIF32ToAsciiFloat(val32, numbuf,6, 3, 1);
           //isprintf(dispbuf,"%s ",numbuf);
 
 	  sprintf( dispbuf, "%3.3f  ", val32f );
 	}
+
+        dispbuf[strlen(dispbuf)] = ' ';
       }
     }
     break;
@@ -2558,6 +2529,7 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
     // BART CIRCA
     case DRD_PERSONALITY_BART:
     {
+      demodsr = state -> DemodShiftIdx;
       // Lowest 4 freqs do not have modulation
 
       if ( state -> PresFreqIdx < 4 )
@@ -3074,9 +3046,11 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     {
-      if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+      BuildBaseDisplay( state, MODE_CODE, 1, dispbuf );
+
+      if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
       {
         if ( state -> DemodState & AFTC_STATE_A_0 )
         {
@@ -3094,49 +3068,53 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
 	{
           sprintf(dispbuf, "CONSTANT  ");
 	}
-        else
+        else if ( state -> DemodState == AFTC_STATE_NOCARRIER )
         {
           sprintf(dispbuf, "UNKNOWN   ");
         }
+        else
+        {
+          sprintf(dispbuf, "INVALID CODE");
+        }
       }
-      else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+      else // (gSigType == SIGTYPE_DRD_CATS_CAB)
       {
         switch ( state -> DemodState ) // Cab LCD Display
         {
-          case DRD_CHAR_CAB_STATE_CONSTANT:
+          case DRD_CATS_CAB_STATE_CONSTANT:
             sprintf(dispbuf, "CONSTANT  ");
           break;
 
-          case DRD_CHAR_CAB_STATE_NOCARRIER:
+          case DRD_CATS_CAB_STATE_NOCARRIER:
             sprintf(dispbuf, "NO CODE   ");
           break;
 
-          case DRD_CHAR_CAB_STATE_UNKNOWN:
-            sprintf(dispbuf, "UNKNOWN   ");
+          case DRD_CATS_CAB_STATE_UNKNOWN:
+            sprintf(dispbuf, "INVALID CODE");
           break;
 
-          case DRD_CHAR_CAB_STATE_55:
+          case DRD_CATS_CAB_STATE_55:
             sprintf(dispbuf, "55 MPH    ");
           break;
 
-          case DRD_CHAR_CAB_STATE_45:
+          case DRD_CATS_CAB_STATE_45:
             sprintf(dispbuf, "45 MPH    ");
           break;
 
-          case DRD_CHAR_CAB_STATE_35:
+          case DRD_CATS_CAB_STATE_35:
             sprintf(dispbuf, "35 MPH    ");
           break;
 
-          case DRD_CHAR_CAB_STATE_25:
+          case DRD_CATS_CAB_STATE_25:
             sprintf(dispbuf, "25 MPH    ");
           break;
 
-          case DRD_CHAR_CAB_STATE_15:
+          case DRD_CATS_CAB_STATE_15:
             sprintf(dispbuf, "15 MPH    ");
           break;
 
-          case DRD_CHAR_CAB_STATE_05:
-            sprintf(dispbuf, " 5 MPH    ");
+          case DRD_CATS_CAB_STATE_10:
+            sprintf(dispbuf, "10 MPH    ");
           break;
 
           default:
@@ -3144,6 +3122,8 @@ void GetCorrectCodeForDisplay( struct _drd_state_ *state, char *dispbuf )
           break;
         }
       }
+
+      dispbuf[strlen(dispbuf)] = ' ';
     }
     break;
   } // end switch(gDRDPersonality)
@@ -3175,7 +3155,7 @@ void GetCorrectDutyForDisplay( struct _drd_state_ *state, char *dispbuf )
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     case DRD_PERSONALITY_DRD_MFOR:
     {
       // DRD_MFOR does not display duty cycle.
@@ -3331,7 +3311,7 @@ void GetFreqForDisplay( struct _drd_state_ *state, char *dispbuf )
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     case DRD_PERSONALITY_DRD_MFOR:
     {
       sprintf(dispbuf, "%4dHZ", state -> PresDispFreq);
@@ -3377,7 +3357,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
       {
         if ( Line == 1 )
         {
-          sprintf(dispbuf, "   mph          ");
+          sprintf(dispbuf, "   MPH          ");
         }
         else
         {
@@ -4024,11 +4004,11 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     {
       if ( Mode == MODE_CODE )
       {
-        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
         {
           if ( Line == 1 )
           {
@@ -4055,7 +4035,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
             }
           }
         }
-        else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+        else // (gSigType == SIGTYPE_DRD_CATS_CAB)
         {
           //   1234567890123456
           // --------------------
@@ -4091,7 +4071,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
       }
       else // (Mode == MODE_MEAS)
       {
-        if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+        if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
         {
           if ( Line == 1 )
           {
@@ -4118,7 +4098,7 @@ void BuildBaseDisplay( struct _drd_state_ *state, int Mode, int Line, char *disp
             }
           }
         }
-        else // (gSigType == SIGTYPE_DRD_CHAR_CAB)
+        else // (gSigType == SIGTYPE_DRD_CATS_CAB)
         {
           //   1234567890123456
           // --------------------
@@ -4233,13 +4213,13 @@ void GetMeasUnits( struct _drd_state_ *state, char *textbuf )
     }
     break;
 
-    case DRD_PERSONALITY_DRD_CHAR:
+    case DRD_PERSONALITY_DRD_CATS:
     {
-      if ( state -> SigType == SIGTYPE_DRD_CHAR_AFTC )
+      if ( state -> SigType == SIGTYPE_DRD_CATS_AFTC )
       {
         sprintf(textbuf, "%s", DRDPersTable.AmpsUnits2);
       }
-      else if ( state -> SigType == SIGTYPE_DRD_CHAR_CAB )
+      else if ( state -> SigType == SIGTYPE_DRD_CATS_CAB )
       {
         sprintf(textbuf, "%s", DRDPersTable.AmpsUnits1);
       }

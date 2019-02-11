@@ -132,6 +132,8 @@ float Voltage1ImagOutputs[TRANSFER_SIZE]; // Storage for the imaginary voltage r
 float Voltage2RealOutputs[TRANSFER_SIZE]; // Storage for the real current results from the DFT
 float Voltage2ImagOutputs[TRANSFER_SIZE]; // Storage for the imaginary current results from the DFT
 
+int timeTraceIndex, timeTraceTable[2][64];
+
 extern PERS_TAB_T DRDPersTable;
 
 static void InitializeDFT( struct matched_filter *filter, float32_t frequency, float32_t sample_frequency )
@@ -717,171 +719,227 @@ void InitializeProcData( struct _drd_state_ *state, float32_t frequency )
 *
 *******************************************************************************/
 
-void BART_Decoder( struct _drd_state_ *state, short *buff, uint16_t size )
+void BART_Decoder( struct _drd_state_ *state, short *data, uint16_t size )
 {
-  uint16_t i;
-  int Voltage1CountOut, Voltage2CountOut, Magnitude1CountOut, Magnitude2CountOut;
-  float32_t Voltage1MagSquared, Voltage2MagSquared, FilteredVoltage1MagSquared, FilteredVoltage2MagSquared;
-  
-  SingleLineDFT( &Voltage1MatchedFilter, buff, Voltage1RealOutputs, Voltage1ImagOutputs, size, &Voltage1CountOut );
+  int j;
+  float32_t sineTemp, cosineTemp, temp;
+  static int shortPulseCount = 0;
 
-  SingleLineDFT( &Voltage2MatchedFilter, buff, Voltage2RealOutputs, Voltage2ImagOutputs, size, &Voltage2CountOut );
 
-  if ( Voltage1CountOut >= size )
+  for( j = 0;j < BLOCK_SIZE;m++, j++ )
   {
-    for( i = 0;i < size;i++ )
+    if ( m >= SAMPLE_FREQUENCY )
     {
-      Voltage1MagSquared = Voltage1RealOutputs[i]*Voltage1RealOutputs[i] + Voltage1ImagOutputs[i]*Voltage1ImagOutputs[i];
+      m = 0;
 
-      Voltage2MagSquared = Voltage2RealOutputs[i]*Voltage2RealOutputs[i] + Voltage2ImagOutputs[i]*Voltage2ImagOutputs[i];
-
-      MovingAverage( &Magnitude1Filter, &Voltage1MagSquared, &FilteredVoltage1MagSquared, 1, &Magnitude1CountOut );
-
-      MovingAverage( &Magnitude2Filter, &Voltage2MagSquared, &FilteredVoltage2MagSquared, 1, &Magnitude2CountOut );
-
-      if ( Magnitude1CountOut && Magnitude2CountOut )
-      {
-        state -> DemodShiftCount++;
-
-        state -> SampCount += 1;
-
-	state -> PeakSquaredAvg = FilteredVoltage1MagSquared;
-
-        //
-        //           0 MPH   6 MPH   18 MPH  27 MPH  36 MPH  50 MPH  70 MPH  80 MPH
-        // --------  ------  ------  ------  ------  ------  ------  ------  ------
-        // PHASE 1   100000  100001  101001  100101  100011  101011  100111  101111
-        // PHASE 2   010000  110000  110100  110010  110001  110101  110011  110111
-        // PHASE 3   001000  011000  011010  011001  111000  111010  111001  111011
-        // PHASE 4   000100  001100  001101  101100  011100  011101  111100  111101
-        // PHASE 5   000010  000110  100110  010110  001110  101110  011110  111110
-        // PHASE 6   000001  000011  010011  001011  000111  010111  001111  011111
-        //
-        ////////////////////////////////////////////////////////////////////////////////
-
-
-        // State Machine for BART Decoding
-        //////////////////////////////////
-        switch( state -> DemodState )
-        {
-          // STATE NOCARRIER    If '1' seen: GOTO STATE_UNKNOWN_1 (reset period timer)
-
-          case BART_STATE_NOCARRIER:
-            if( FilteredVoltage1MagSquared >= state -> DemodThreshold )
-            {
-              state -> SampCount = 0;
-              state -> DemodState = BART_STATE_1;
-              state -> DemodShiftReg = 0;
-            }
-          break;
-
-          // STATE_CONSTANT     If a '0' is seen, GOTO STATE_NOCARRIER
-
-          case BART_STATE_CONSTANT:
-            if ( FilteredVoltage2MagSquared >= state -> DemodThreshold )
-            {
-              state -> DemodState = BART_STATE_NOCARRIER;
-              state -> DemodShiftReg = 0;
-            }
-          break;
-
-          case BART_STATE_1:
-            // Check if high too long
-
-            if ( (FilteredVoltage1MagSquared >= state -> DemodThreshold) && (state -> SampCount > state -> DemodMaxOnCounts) )
-            {
-              state -> DemodState = BART_STATE_CONSTANT;
-              state -> DemodShiftReg = 0x3F;
-              state -> DemodShiftCount = 0;
-              state -> DemodShiftIdx = 0x3F;
-              state -> DemodShiftState = 0;
-            }
-
-            // detect low
-
-            else if ( FilteredVoltage2MagSquared >= state -> DemodThreshold )
-            {
-              state -> DemodOnCounts = state -> SampCount;  // grab on time
-              state -> SampCount = 0;
-
-              if ( state -> DemodShiftState == 0 )
-              {
-                state -> DemodShiftState = 1;
-                state -> DemodShiftCount = 0;
-                state -> DemodShiftReg = 0;
-                state -> DemodNextBitTime = state -> DemodHalfBit;
-              }
-
-              state -> DemodState = BART_STATE_0;
-            }
-          break;
-
-          case BART_STATE_0:
-            // Check if low too long
-            ////////////////////////////////////////////////////////////
-
-            if ( (FilteredVoltage2MagSquared >= state -> DemodThreshold) && (state -> SampCount > state -> DemodMaxOffCounts) )
-            {
-              state -> DemodState = BART_STATE_NOCARRIER;
-              state -> DemodShiftReg = 0;
-              state -> DemodShiftCount = 0;
-              state -> DemodShiftIdx = 0;
-              state -> DemodShiftState = 0;
-            }
-
-            // if a logic '1' is detected
-
-            else if ( FilteredVoltage1MagSquared >= state -> DemodThreshold )
-            {
-              state -> DemodOnCounts = state -> SampCount;  // grab on time
-              state -> SampCount = 0;
-
-              if ( state -> DemodShiftState == 0)
-              {
-                state -> DemodShiftState = 1;
-                state -> DemodShiftCount = 0;
-                state -> DemodShiftReg = 0;
-                state -> DemodNextBitTime = state -> DemodHalfBit;
-              }
-
-              state -> DemodState = BART_STATE_1;
-            }
-          break;
-
-          default:
-          break;
-        } // end switch(gDemodState)
-
-        if ( state -> DemodShiftState > 0)
-        {
-          if ( state -> DemodShiftCount >=  state -> DemodNextBitTime )
-          {
-            if ( state -> DemodState == BART_STATE_0)
-            {
-              state -> DemodShiftReg <<= 1;
-            }
-            else if ( state -> DemodState == BART_STATE_1)
-            {
-              state -> DemodShiftReg <<= 1;
-              state -> DemodShiftReg |= 1;
-            }
-
-            state -> DemodNextBitTime += state -> DemodOneBit;
-            state -> DemodShiftState++;
-          }
-
-          if ( state -> DemodShiftState == 7 )
-          {
-            state -> DemodShiftState = 0;
-            state -> DemodShiftCount = 0;
-            state -> DemodShiftIdx = state -> DemodShiftReg & 0x3F;
-          }
-        }
-      }
+      state -> currentSineF32 = 0.0;
+      state -> currentCosineF32 = 1.0;
     }
 
-    state -> PeakAvg = sqrtf( state -> PeakSquaredAvg );
+    SineSamples[j] = data[j]*state -> currentSineF32;
+
+    CosineSamples[j] = data[j]*state -> currentCosineF32;
+
+    sineTemp = state -> currentSineF32*state -> cosinef32 + state -> currentCosineF32*state -> sinef32;
+
+    cosineTemp = state -> currentCosineF32*state -> cosinef32 - state -> currentSineF32*state -> sinef32;
+
+    state -> currentSineF32 = sineTemp;
+
+    state -> currentCosineF32 = cosineTemp;
   }
+
+  arm_fir_decimate_f32( &FirstSineInstance, SineSamples, FirstInstanceSineOutputs, BLOCK_SIZE );
+  arm_fir_decimate_f32( &FirstCosineInstance, CosineSamples, FirstInstanceCosineOutputs, BLOCK_SIZE );
+
+  arm_fir_decimate_f32( &SecondSineInstance, FirstInstanceSineOutputs, SecondInstanceSineOutputs, BLOCK_SIZE/8 );
+  arm_fir_decimate_f32( &SecondCosineInstance, FirstInstanceCosineOutputs, SecondInstanceCosineOutputs, BLOCK_SIZE/8 );
+
+  for( j = 0;j < BLOCK_SIZE/64;j++ )
+  {
+    state -> SampCount += 1;
+
+    state -> DemodAvg = SecondInstanceSineOutputs[j]*SecondInstanceSineOutputs[j] + SecondInstanceCosineOutputs[j]*SecondInstanceCosineOutputs[j];
+
+    if ( state -> DemodAvg > .998*state -> PeakDemodAvg ) 
+    {
+      state -> PeakDemodAvg = state -> DemodAvg;
+    }
+
+    temp = state -> PeakSquaredAvg1[0];
+
+    state -> PeakSquaredAvg1[0] = FILTER_COEFF_1*state -> PeakSquaredAvg1[0] - FILTER_COEFF_2*state -> PeakSquaredAvg1[1] + (1.0 - LOW_PASS_GAIN)*(1.0 - LOW_PASS_GAIN)*state -> PeakDemodAvg;
+    
+    state -> PeakSquaredAvg1[1] = temp;
+
+    temp = state -> PeakSquaredAvg;
+
+    state -> PeakSquaredAvg = FILTER_COEFF_1*state -> PeakSquaredAvg - FILTER_COEFF_2*state -> PeakSquaredAvg1[2] + (1.0 - LOW_PASS_GAIN)*(1.0 - LOW_PASS_GAIN)*state -> PeakSquaredAvg1[0];
+    
+    state -> PeakSquaredAvg1[2] = temp;
+
+    state -> PeakDemodAvg *= .999;
+
+    state -> DemodShiftCount++;
+
+    //
+    //           0 MPH   6 MPH   18 MPH  27 MPH  36 MPH  50 MPH  70 MPH  80 MPH
+    // --------  ------  ------  ------  ------  ------  ------  ------  ------
+    // PHASE 1   100000  100001  101001  100101  100011  101011  100111  101111
+    // PHASE 2   010000  110000  110100  110010  110001  110101  110011  110111
+    // PHASE 3   001000  011000  011010  011001  111000  111010  111001  111011
+    // PHASE 4   000100  001100  001101  101100  011100  011101  111100  111101
+    // PHASE 5   000010  000110  100110  010110  001110  101110  011110  111110
+    // PHASE 6   000001  000011  010011  001011  000111  010111  001111  011111
+    //
+    ////////////////////////////////////////////////////////////////////////////////
+
+
+    // State Machine for BART Decoding
+    //////////////////////////////////
+    switch( state -> DemodState )
+    {
+      // STATE NOCARRIER    If '1' seen: GOTO STATE_UNKNOWN_1 (reset period timer)
+
+      case BART_STATE_NOCARRIER:
+        if( state -> DemodAvg >= state -> DemodThreshold )
+        {
+          state -> SampCount = 0;
+          state -> DemodState = BART_STATE_1;
+          state -> DemodShiftReg = 0;
+        }
+      break;
+
+      // STATE_CONSTANT     If a '0' is seen, GOTO STATE_NOCARRIER
+
+      case BART_STATE_CONSTANT:
+        if( state -> DemodAvg < state -> DemodThresholdHyst )
+        {
+          state -> DemodState = BART_STATE_NOCARRIER;
+          state -> DemodShiftReg = 0;
+        }
+      break;
+
+      case BART_STATE_1:
+        // Check if high too long
+
+        if ( ( state -> DemodAvg >= state -> DemodThreshold ) && ( 64*(state -> SampCount) > state -> DemodMaxOnCounts ) )
+        {
+          state -> DemodState = BART_STATE_CONSTANT;
+          state -> DemodShiftReg = 0x3F;
+          state -> DemodShiftCount = 0;
+          state -> DemodShiftIdx = 0x3F;
+          state -> DemodShiftState = 0;
+        }
+
+        // detect low
+
+        else if ( state -> DemodAvg < state -> DemodThresholdHyst )
+        {
+          state -> DemodOnCounts = 64*(state -> SampCount);  // grab on time
+          state -> SampCount = 0;
+
+          timeTraceTable[0][timeTraceIndex/2] = state -> DemodOnCounts;
+
+          timeTraceIndex += 1;
+
+          if ( timeTraceIndex >= 64 )
+          {
+            timeTraceIndex = 0;
+          }
+
+          if ( state -> DemodShiftState == 0 )
+          {
+            state -> DemodShiftState = 1;
+            state -> DemodShiftCount = 0;
+            state -> DemodShiftReg = 0;
+            state -> DemodNextBitTime = state -> DemodHalfBit;
+          }
+
+          state -> DemodState = BART_STATE_0;
+        }
+      break;
+
+      case BART_STATE_0:
+        // Check if low too long
+        ////////////////////////////////////////////////////////////
+
+        if ( ( state -> DemodAvg < state -> DemodThreshold) && (64*(state -> SampCount) > state -> DemodMaxOffCounts) )
+        {
+          state -> DemodState = BART_STATE_NOCARRIER;
+          state -> DemodShiftReg = 0;
+          state -> DemodShiftCount = 0;
+          state -> DemodShiftIdx = 0;
+          state -> DemodShiftState = 0;
+        }
+
+        // if a logic '1' is detected
+
+        else if ( state -> DemodAvg >= state -> DemodThreshold )
+        {
+          state -> DemodOnCounts = 64*(state -> SampCount);  // grab on time
+          state -> SampCount = 0;
+
+          timeTraceTable[1][timeTraceIndex/2] = state -> DemodOnCounts;
+
+          timeTraceIndex += 1;
+
+          if ( timeTraceIndex >= 64 )
+          {
+            timeTraceIndex = 0;
+          }
+
+          if ( state -> DemodShiftState == 0)
+          {
+            state -> DemodShiftState = 1;
+            state -> DemodShiftCount = 0;
+            state -> DemodShiftReg = 0;
+            state -> DemodNextBitTime = state -> DemodHalfBit;
+          }
+
+          state -> DemodState = BART_STATE_1;
+        }
+      break;
+
+      default:
+        break;
+    } // end switch(gDemodState)
+
+    if ( state -> DemodShiftState > 0)
+    {
+      if ( 64*(state -> DemodShiftCount) >=  state -> DemodNextBitTime )
+      {
+        if ( state -> DemodState == BART_STATE_0)
+        {
+          state -> DemodShiftReg <<= 1;
+        }
+        else if ( state -> DemodState == BART_STATE_1)
+        {
+          state -> DemodShiftReg <<= 1;
+          state -> DemodShiftReg |= 1;
+        }
+
+        state -> DemodNextBitTime += state -> DemodOneBit;
+        state -> DemodShiftState++;
+      }
+      else
+      {
+        if ( state -> DemodState == BART_STATE_1 )
+        {
+          shortPulseCount += 1;
+        }
+      }
+
+      if ( state -> DemodShiftState == 7 )
+      {
+        state -> DemodShiftState = 0;
+        state -> DemodShiftCount = 0;
+        state -> DemodShiftIdx = state -> DemodShiftReg & 0x3F;
+      }
+    }
+  }
+
+  state -> PeakAvg = sqrtf( state -> PeakSquaredAvg );
 } // BART_Decoder()
 
 /*******************************************************************************
@@ -2572,7 +2630,7 @@ void DRD_RET_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size
 } // DRD_RET__Decoder()
 
 /*******************************************************************************
-* Function: DRD_CHAR_CABDecoder
+* Function: DRD_CATS_CABDecoder
 *
 * Summary:  Processes the demod data to extract CAB codes.
 *
@@ -2580,7 +2638,7 @@ void DRD_RET_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size
 *
 * For 2340 Hz carrier: every 42.7 uS (23.4KHz Hz) Decode Cab Signalling
 *
-* CHAR Cab signalling consists of a carrier at 2340Hz and 
+* CATS Cab signalling consists of a carrier at 2340Hz and 
 * modulation is just on/off keying at a particular rate.
 * The algorithm used in a real cab will be closely mirrored here.
 * The signal is sampled at 10 times the carrier (23.4 KHz for 2340 Hz).
@@ -2592,7 +2650,7 @@ void DRD_RET_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size
 * A state machine is used to track the cab state and decode the modulation.
 *
 *******************************************************************************/
-void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size )
+void DRD_CATS_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t size )
 {
   int j;
   float32_t sineTemp, cosineTemp;
@@ -2660,9 +2718,9 @@ void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t siz
 
       // Check for signal that has been "ON" greater than 555ms.
 
-      if ( 64*(state -> SampCount) >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn )
+      if ( 64*(state -> SampCount) >= state -> CabTimes.CATS.DRD_CATS_CAB_MaxOn )
       {
-        state -> last_cab_on_time = state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn;
+        state -> last_cab_on_time = state -> CabTimes.CATS.DRD_CATS_CAB_MaxOn;
         state -> last_cab_off_time = 0;
         state -> SampCount = 1;
       }
@@ -2680,9 +2738,9 @@ void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t siz
 
       // Set state to No Carrier if signal has been "OFF" greater than 2368ms.
 
-      if ( 64*(state -> SampCount) >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff )
+      if ( 64*(state -> SampCount) >= state -> CabTimes.CATS.DRD_CATS_CAB_MaxOff )
       {
-        state -> last_cab_off_time = state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff;
+        state -> last_cab_off_time = state -> CabTimes.CATS.DRD_CATS_CAB_MaxOff;
         state -> last_cab_on_time = 0;
         state -> SampCount = 1;
       }
@@ -2692,18 +2750,18 @@ void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t siz
 
     // Determine the current CAB code state based on the ON/OFF times.
 
-    if ( state -> last_cab_on_time >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOn )
+    if ( state -> last_cab_on_time >= state -> CabTimes.CATS.DRD_CATS_CAB_MaxOn )
     {
       state -> ScanForPeaks = 1;  // Always scan for peaks with CC.
-      state -> DemodState = DRD_CHAR_CAB_STATE_CONSTANT;
+      state -> DemodState = DRD_CATS_CAB_STATE_CONSTANT;
     }
-    else if ( state -> last_cab_off_time >= state -> CabTimes.CHAR.DRD_CHAR_CAB_MaxOff )
+    else if ( state -> last_cab_off_time >= state -> CabTimes.CATS.DRD_CATS_CAB_MaxOff )
     {
       // Only clear buffers/states on the transition to NOCARRIER from another state.
 
-      if ( state -> DemodState != DRD_CHAR_CAB_STATE_NOCARRIER )
+      if ( state -> DemodState != DRD_CATS_CAB_STATE_NOCARRIER )
       {
-        state -> DemodState = DRD_CHAR_CAB_STATE_NOCARRIER;
+        state -> DemodState = DRD_CATS_CAB_STATE_NOCARRIER;
       }
     }
     else
@@ -2714,33 +2772,33 @@ void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t siz
 
         state -> Period = state -> last_cab_on_time + state -> last_cab_off_time;
 
-        if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_55_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_55_MaxPer )
+        if ( state -> Period > state -> CabTimes.CATS.DRD_CATS_55_MinPer && state -> Period < state -> CabTimes.CATS.DRD_CATS_55_MaxPer )
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_55;
+          state -> DemodState = DRD_CATS_CAB_STATE_55;
         }
-        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_45_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_45_MaxPer )
+        else if ( state -> Period > state -> CabTimes.CATS.DRD_CATS_45_MinPer && state -> Period < state -> CabTimes.CATS.DRD_CATS_45_MaxPer )
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_45;
+          state -> DemodState = DRD_CATS_CAB_STATE_45;
         }
-        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_35_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_35_MaxPer)
+        else if ( state -> Period > state -> CabTimes.CATS.DRD_CATS_35_MinPer && state -> Period < state -> CabTimes.CATS.DRD_CATS_35_MaxPer)
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_35;
+          state -> DemodState = DRD_CATS_CAB_STATE_35;
         }
-        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_25_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_25_MaxPer )
+        else if ( state -> Period > state -> CabTimes.CATS.DRD_CATS_25_MinPer && state -> Period < state -> CabTimes.CATS.DRD_CATS_25_MaxPer )
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_25;
+          state -> DemodState = DRD_CATS_CAB_STATE_25;
         }
-        else if ( state -> Period > state -> CabTimes.CHAR.DRD_CHAR_15_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_15_MaxPer )
+        else if ( state -> Period > state -> CabTimes.CATS.DRD_CATS_15_MinPer && state -> Period < state -> CabTimes.CATS.DRD_CATS_15_MaxPer )
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_15;
+          state -> DemodState = DRD_CATS_CAB_STATE_15;
         }
-        else if ( state -> Period > state ->CabTimes.CHAR.DRD_CHAR_05_MinPer && state -> Period < state -> CabTimes.CHAR.DRD_CHAR_05_MaxPer )
+        else if ( state -> Period > state ->CabTimes.CATS.DRD_CATS_10_MinPer && state -> Period < state -> CabTimes.CATS.DRD_CATS_10_MaxPer )
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_05;
+          state -> DemodState = DRD_CATS_CAB_STATE_10;
         }
         else 
         {
-          state -> DemodState = DRD_CHAR_CAB_STATE_UNKNOWN;
+          state -> DemodState = DRD_CATS_CAB_STATE_UNKNOWN;
           state -> ScanForPeaks = 0;         // stop scanning for peaks until a known modulation is present
         }
       }
@@ -2748,4 +2806,4 @@ void DRD_CHAR_CABDecoder( struct _drd_state_ *state, int16_t *data, uint16_t siz
   }
 
   state -> PeakAvg = sqrtf( state -> PeakSquaredAvg );
-} // end DRD_CHAR_CABDecoder()
+} // end DRD_CATS_CABDecoder()

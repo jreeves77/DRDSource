@@ -85,7 +85,8 @@
 #define LOW_BATTERY_THRESHOLD 4.0f
 #define LOW_BATTERY_WARNING 4.25f
 
-#include "char.h"
+#include "mfor.h"
+// #include "cats.h"
 // #include "ret.h"
 // #include "stl.h"
 
@@ -1016,9 +1017,6 @@ int main(void)
   DRDState.Mode = DRDPersTable.InitMode;
   DRDState.SigType = DRDPersTable.InitSigType;
 
-  PersonalityInit(&DRDState);
-  CalculateNewSettings(&DRDState, 1);
-
   // Build initial LCD screen
 
   LCD_Clrscr( &DRDState );
@@ -1049,7 +1047,7 @@ int main(void)
   }
   else // No sensor detected.
   {
-    if ( DRDState.SensorType == SENSTYPE_SHUNT )
+    if ( DRDState.SensorType != SENSTYPE_SHUNT )
     {
       i = ReadShuntType();
 
@@ -1082,6 +1080,9 @@ int main(void)
       sensor = i;
     }
   }
+
+  PersonalityInit(&DRDState);
+  CalculateNewSettings(&DRDState, 1);
 
   BuildBaseDisplay(  &DRDState, DRDState.Mode, 1, lcdbuf );
   LCD_Puts( &LCDTransmitRingBuffer, lcdbuf, strlen(lcdbuf) );
@@ -1305,7 +1306,7 @@ int main(void)
         last_sensor = sensor;
         sensor = SensorDetect();
 
-        if ( sensor )
+        if ( sensor && (DRDState.DRDPersonality != DRD_PERSONALITY_BART) )
         {
           sensor = CheckSensorMatch( &DRDState );
         }
@@ -1324,7 +1325,7 @@ int main(void)
 
           if ( DRDState.DRDPersonality == DRD_PERSONALITY_BART )
 	  {
-            if ( i == SENSDET_SHORT )
+            if ( i == SENSDET_200OHM )
             {
               DRDState.SigType = SIGTYPE_BARTSC;
               DRDState.SensorType = DRDPersTable.SensorType1 & 0x00FF;
@@ -1730,14 +1731,14 @@ int main(void)
         }
       break;
 
-      case DRD_PERSONALITY_DRD_CHAR:
-        if ( DRDState.SigType == SIGTYPE_DRD_CHAR_AFTC )
+      case DRD_PERSONALITY_DRD_CATS:
+        if ( DRDState.SigType == SIGTYPE_DRD_CATS_AFTC )
         {
           DRD_AFTCDecoder( &DRDState, rxBuff[currentBuffer ^ 1], TRANSFER_SIZE) ;
         }
         else // (gSigType == SIGTYPE_DRD_MFOR_CAB)
         {
-          DRD_CHAR_CABDecoder( &DRDState, rxBuff[currentBuffer ^ 1], TRANSFER_SIZE) ;
+          DRD_CATS_CABDecoder( &DRDState, rxBuff[currentBuffer ^ 1], TRANSFER_SIZE) ;
         }
       break;
 

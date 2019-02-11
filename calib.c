@@ -521,18 +521,10 @@ void Calib_DoCalibration( struct _drd_state_ *state, unsigned char *point, int c
 
         if ( state -> DRDPersonality == DRD_PERSONALITY_BART )
         {
-          if ( state -> SigType == SIGTYPE_BARTSC )
-          {
-            sprintf(output, "\r\nActual reading was %4ld %s", actualamps, ampsunits);
-            SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
-          }
-          else if ( state -> SigType == SIGTYPE_BARTMV )
-          {
-            val32f = actualamps;
+          val32f = actualamps;
 
-            sprintf(output, "\r\nActual reading was %4.1f %s", val32f, ampsunits);
-            SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
-          }
+          sprintf(output, "\r\nActual reading was %4.1f %s", val32f, ampsunits);
+          SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
 
           sprintf(output, "\r\nEnter desired reading : ");
           SendBytes( LPC_USART0, &USART0TransmitRingBuffer, output, strlen(output) );
